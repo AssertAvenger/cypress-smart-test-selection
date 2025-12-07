@@ -39,9 +39,9 @@ importers:
       cypress:
         specifier: ^13.0.0
         version: 13.17.0
-      cypress-diff-runner:
+      cypress-test-selector:
         specifier: workspace:*
-        version: link:../../packages/cli
+        version: link:../..
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
@@ -51,9 +51,9 @@ importers:
 
   packages/cli:
     dependencies:
-      '@cypress-diff-runner/core':
-        specifier: file:../core
-        version: link:../core
+      '@assertavenger/cypress-test-selector-core':
+        specifier: ^0.1.0
+        version: 0.1.0
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -85,6 +85,9 @@ importers:
         version: 1.6.1(@types/node@20.19.25)
 
 packages:
+
+  '@assertavenger/cypress-test-selector-core@0.1.0':
+    resolution: {integrity: sha512-3DWviKkIiNhL6LvkEmyAu4PzOMZVN/M5q0xNUc8nYYrHCyQ09CkAv3iDzY71RsPNznExMEoa7+pT2hNoDry82w==}
 
   '@babel/code-frame@7.27.1':
     resolution: {integrity: sha512-cjQ7ZlQ0Mv3b47hABuTevyTuYN4i+loJKGeV9flcCgIK37cCXRh+L1bd3iBHlynerhQ7BhCkn2BPbQUL+rGqFg==}
@@ -1847,6 +1850,10 @@ packages:
     engines: {node: '>=12.20'}
 
 snapshots:
+
+  '@assertavenger/cypress-test-selector-core@0.1.0':
+    dependencies:
+      fast-glob: 3.3.3
 
   '@babel/code-frame@7.27.1':
     dependencies:

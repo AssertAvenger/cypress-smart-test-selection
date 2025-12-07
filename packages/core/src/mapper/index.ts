@@ -10,11 +10,36 @@ import type { DiscoveredTestFile } from "../discovery/types.js";
 import { calculateDirectoryScore } from "./directory-heuristic.js";
 import { calculateSimilarityScore } from "./similarity-heuristic.js";
 import { calculateImportGraphScore } from "./import-graph-heuristic.js";
-import { calculateTagScore } from "./tag-heuristic.js";
+import { calculateTagScore, extractMatchingTags, hasMatchingTag } from "./tag-heuristic.js";
 import { calculateTitleScore } from "./title-heuristic.js";
 import { combineScores } from "./scoring.js";
 import { getThreshold, filterBySafety } from "./safety.js";
 import { SAFETY_THRESHOLDS, DEFAULT_WEIGHTS } from "./types.js";
+
+/**
+ * Check if a test file is a smoke test
+ * Smoke tests are identified by:
+ * 1. Tests tagged with @smoke
+ * 2. Tests in a path containing "smoke" (e.g., cypress/smoke)
+ *
+ * @param testFile - Test file to check
+ * @returns true if the test is a smoke test
+ */
+function isSmokeTest(testFile: DiscoveredTestFile): boolean {
+  // Check for @smoke tag
+  const testTagsLower = testFile.tags.map((t) => t.toLowerCase().trim());
+  if (testTagsLower.includes("smoke")) {
+    return true;
+  }
+
+  // Check if path contains "smoke" (case-insensitive)
+  const testPathLower = testFile.file.toLowerCase();
+  if (testPathLower.includes("/smoke/") || testPathLower.includes("\\smoke\\")) {
+    return true;
+  }
+
+  return false;
+}
 
 /**
  * Map changed files to test files using multiple heuristics
@@ -41,9 +66,6 @@ export async function mapDiffToTests(
 
   // Get threshold based on safety level
   const threshold = getThreshold(safetyLevel, customThreshold);
-
-  // Calculate scores for each test file
-  const mappings: TestMapping[] = [];
 
   // Normalize tests to DiscoveredTestFile format
   const testFiles: DiscoveredTestFile[] = tests.map((test) => {
@@ -74,7 +96,57 @@ export async function mapDiffToTests(
     }
   }
 
+  // STEP 1: Extract matching tags from changed files for 100% inclusive selection
+  const matchingTags = extractMatchingTags(diff);
+  
+  // STEP 2: Identify all tests with matching tags (100% inclusive - bypass threshold)
+  const tagMatchedTests = new Set<string>();
+  const tagMatchedMappings: TestMapping[] = [];
+  
   for (const testFile of testFiles) {
+    if (hasMatchingTag(testFile, matchingTags)) {
+      tagMatchedTests.add(testFile.file);
+      
+      // Calculate scores for tag-matched tests (for reporting)
+      const testPath = testFile.file;
+      let maxDirectoryScore = 0.0;
+      let maxSimilarityScore = 0.0;
+      let maxImportScore = 0.0;
+      let maxTagScore = 0.0;
+      let maxTitleScore = 0.0;
+      
+      for (const changedFile of diff) {
+        maxDirectoryScore = Math.max(maxDirectoryScore, calculateDirectoryScore(changedFile, testPath));
+        maxSimilarityScore = Math.max(maxSimilarityScore, calculateSimilarityScore(changedFile, testPath));
+        maxImportScore = Math.max(maxImportScore, await calculateImportGraphScore(changedFile, testPath, projectRoot));
+        maxTagScore = Math.max(maxTagScore, calculateTagScore(changedFile, testFile));
+        maxTitleScore = Math.max(maxTitleScore, calculateTitleScore(changedFile, testFile));
+      }
+      
+      // Tag-matched tests get guaranteed inclusion with high score
+      tagMatchedMappings.push({
+        testPath,
+        score: 1.0, // Guaranteed high score to bypass threshold
+        heuristics: {
+          directory: maxDirectoryScore,
+          similarity: maxSimilarityScore,
+          importGraph: maxImportScore,
+          tags: maxTagScore,
+          titles: maxTitleScore,
+        },
+        reason: "tag match (100% inclusive)",
+      });
+    }
+  }
+
+  // STEP 3: Calculate scores for remaining tests (normal selection logic)
+  const mappings: TestMapping[] = [];
+
+  for (const testFile of testFiles) {
+    // Skip tests already included via tag matching
+    if (tagMatchedTests.has(testFile.file)) {
+      continue;
+    }
     const testPath = testFile.file;
     let maxScore = 0.0;
     let maxDirectoryScore = 0.0;
@@ -152,15 +224,65 @@ export async function mapDiffToTests(
     }
   }
 
+  // STEP 4: Combine tag-matched tests with normally scored tests
+  const allMappings = [...tagMatchedMappings, ...mappings];
+  
   // Sort by score (descending)
-  mappings.sort((a, b) => b.score - a.score);
+  allMappings.sort((a, b) => b.score - a.score);
 
-  // Filter by safety level
-  const selected = filterBySafety(mappings, threshold);
+  // STEP 5: Filter by safety level
+  // Tag-matched tests are already included (score = 1.0), so they bypass threshold
+  const selected = filterBySafety(allMappings, threshold);
+
+  // STEP 6: Always include smoke tests (append at the end)
+  const selectedSet = new Set(selected);
+  const smokeTests: string[] = [];
+  const smokeMappings: TestMapping[] = [];
+
+  for (const testFile of testFiles) {
+    if (isSmokeTest(testFile) && !selectedSet.has(testFile.file)) {
+      smokeTests.push(testFile.file);
+      selectedSet.add(testFile.file);
+
+      // Create mapping for smoke test (for reporting)
+      const testPath = testFile.file;
+      let maxDirectoryScore = 0.0;
+      let maxSimilarityScore = 0.0;
+      let maxImportScore = 0.0;
+      let maxTagScore = 0.0;
+      let maxTitleScore = 0.0;
+
+      // Calculate scores for smoke tests (for reporting, even if not needed for selection)
+      for (const changedFile of diff) {
+        maxDirectoryScore = Math.max(maxDirectoryScore, calculateDirectoryScore(changedFile, testPath));
+        maxSimilarityScore = Math.max(maxSimilarityScore, calculateSimilarityScore(changedFile, testPath));
+        maxImportScore = Math.max(maxImportScore, await calculateImportGraphScore(changedFile, testPath, projectRoot));
+        maxTagScore = Math.max(maxTagScore, calculateTagScore(changedFile, testFile));
+        maxTitleScore = Math.max(maxTitleScore, calculateTitleScore(changedFile, testFile));
+      }
+
+      smokeMappings.push({
+        testPath,
+        score: 1.0, // High score for reporting
+        heuristics: {
+          directory: maxDirectoryScore,
+          similarity: maxSimilarityScore,
+          importGraph: maxImportScore,
+          tags: maxTagScore,
+          titles: maxTitleScore,
+        },
+        reason: "smoke test (always included)",
+      });
+    }
+  }
+
+  // Append smoke tests to selected list and mappings
+  const finalSelected = [...selected, ...smokeTests];
+  const finalMappings = [...allMappings, ...smokeMappings];
 
   return {
-    mappings,
-    selected,
+    mappings: finalMappings,
+    selected: finalSelected,
     safetyLevel,
     threshold,
   };
@@ -182,5 +304,7 @@ export {
   calculateDirectoryScore,
   calculateSimilarityScore,
   calculateImportGraphScore,
+  extractMatchingTags,
+  hasMatchingTag,
 };
 

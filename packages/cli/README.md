@@ -8,26 +8,83 @@ Command-line interface for intelligent Cypress test selection based on git diffs
 npm install @assertavenger/cypress-test-selector
 ```
 
-## Usage
+Or with other package managers:
 
-### Basic Usage
+```bash
+yarn add @assertavenger/cypress-test-selector
+pnpm add @assertavenger/cypress-test-selector
+```
+
+## Running the Command
+
+The `cy-select` command can be run using any package manager. Once installed, the binary is available directly:
+
+### Using npx (Recommended)
 
 ```bash
 # Map git diff to Cypress tests
-cy-select diff
+npx cy-select diff
 
 # Output in JSON format
-cy-select diff --json
+npx cy-select diff --json
 
 # Verbose output with scoring breakdown
-cy-select diff --verbose
+npx cy-select diff --verbose
 
 # Specify git base branch
-cy-select diff --base origin/main
+npx cy-select diff --base origin/main
 
 # Custom test patterns
-cy-select diff --pattern "**/*.spec.ts" --pattern "**/*.test.ts"
+npx cy-select diff --pattern "**/*.spec.ts" --pattern "**/*.test.ts"
 ```
+
+### Using yarn
+
+```bash
+yarn cy-select diff
+yarn cy-select diff --json
+yarn cy-select diff --verbose
+yarn cy-select diff --base origin/main
+yarn cy-select diff --pattern "**/*.spec.ts" --pattern "**/*.test.ts"
+```
+
+### Using pnpm
+
+```bash
+pnpm cy-select diff
+pnpm cy-select diff --json
+pnpm cy-select diff --verbose
+pnpm cy-select diff --base origin/main
+pnpm cy-select diff --pattern "**/*.spec.ts" --pattern "**/*.test.ts"
+```
+
+### Using npm scripts (Optional)
+
+Add to your `package.json` scripts section:
+
+```json
+{
+  "scripts": {
+    "cy-select": "cy-select"
+  }
+}
+```
+
+Then run:
+
+```bash
+npm run cy-select diff
+npm run cy-select diff --json
+npm run cy-select diff --verbose
+npm run cy-select diff --base origin/main
+npm run cy-select diff --pattern "**/*.spec.ts" --pattern "**/*.test.ts"
+```
+
+## Usage
+
+### Basic Usage Examples
+
+All examples below use `npx` for brevity. Replace with your preferred package manager command as shown above.
 
 ### Command Options
 
@@ -80,7 +137,7 @@ export default {
 
 ### Human-Readable (Default)
 
-```
+```text
 Selected 3 tests:
 
   cypress/e2e/components/button.spec.ts
@@ -119,7 +176,7 @@ Total mappings evaluated: 15
 
 ### Verbose Format (`--verbose`)
 
-```
+```text
 Selected 3 tests:
 
   button.spec.ts
@@ -168,4 +225,3 @@ The CLI is structured as follows:
 
 - `cy-select run` - Run Cypress with filtered tests
 - `cy-select debug` - Show detailed scoring breakdown
-
