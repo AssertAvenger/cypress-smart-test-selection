@@ -40,7 +40,7 @@
     "url": "https://github.com/AssertAvenger/cypress-test-selector/issues"
   },
   "dependencies": {
-    "@assertavenger/cypress-test-selector-core": "^0.1.0"
+    "@assertavenger/cypress-test-selector-core": "^0.2.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
