@@ -1,6 +1,6 @@
 {
   "name": "@assertavenger/cypress-test-selector",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI tool for intelligent Cypress test selection based on git diffs",
   "type": "module",
   "bin": {
