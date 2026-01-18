@@ -1,5 +1,5 @@
 {
-  "name": "cypress-test-selector",
+  "name": "cypress-smart-test-selection-monorepo",
   "version": "0.1.0",
   "description": "Intelligent Cypress test selection based on git diffs",
   "private": true,

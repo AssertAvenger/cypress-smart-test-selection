@@ -1,6 +1,6 @@
 {
-  "name": "@assertavenger/cypress-test-selector-core",
-  "version": "0.2.0",
+  "name": "cypress-smart-test-selection-core",
+  "version": "1.0.1",
   "description": "Core diff parsing and intelligent mapping logic for Cypress test selection",
   "type": "module",
   "files": [
@@ -26,11 +26,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AssertAvenger/cypress-test-selector.git"
+    "url": "https://github.com/AssertAvenger/cypress-smart-test-selection.git"
   },
-  "homepage": "https://github.com/AssertAvenger/cypress-test-selector#readme",
+  "homepage": "https://github.com/AssertAvenger/cypress-smart-test-selection#readme",
   "bugs": {
-    "url": "https://github.com/AssertAvenger/cypress-test-selector/issues"
+    "url": "https://github.com/AssertAvenger/cypress-smart-test-selection/issues"
   },
   "dependencies": {
     "fast-glob": "^3.3.2"

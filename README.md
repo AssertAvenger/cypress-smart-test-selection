@@ -6,13 +6,13 @@ Intelligent Cypress test selection based on git diffs. Mimics enterprise-grade T
 
 ### Install
 ```bash
-npm install @assertavenger/cypress-test-selector
+npm install cypress-smart-test-selection
 ```
 
 Or with other package managers:
 ```bash
-yarn add @assertavenger/cypress-test-selector
-pnpm add @assertavenger/cypress-test-selector
+yarn add cypress-smart-test-selection
+pnpm add cypress-smart-test-selection
 ```
 
 ## Running the Command

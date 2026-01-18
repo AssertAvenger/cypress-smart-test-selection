@@ -111,7 +111,7 @@ Configuration:
   3. package.json "cypress-test-selector" key
   4. Defaults
 
-For more information, visit: https://github.com/your-org/cypress-test-selector
+For more information, visit: https://github.com/AssertAvenger/cypress-smart-test-selection
 `);
 }
 

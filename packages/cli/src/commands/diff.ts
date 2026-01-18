@@ -1,7 +1,7 @@
-import { parseDiff } from "@assertavenger/cypress-test-selector-core/diff";
-import { discoverTests } from "@assertavenger/cypress-test-selector-core/discovery";
-import type { DiscoveredTestFile } from "@assertavenger/cypress-test-selector-core/discovery";
-import { mapDiffToTests } from "@assertavenger/cypress-test-selector-core/mapper";
+import { parseDiff } from "cypress-smart-test-selection-core/diff";
+import { discoverTests } from "cypress-smart-test-selection-core/discovery";
+import type { DiscoveredTestFile } from "cypress-smart-test-selection-core/discovery";
+import { mapDiffToTests } from "cypress-smart-test-selection-core/mapper";
 import type { DiffCommandOptions, MergedConfig } from "../types.js";
 import { getGitDiff, isGitRepository } from "../git/getDiff.js";
 import { Logger } from "../output/logger.js";

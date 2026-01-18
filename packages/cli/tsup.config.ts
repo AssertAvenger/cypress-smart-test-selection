@@ -13,7 +13,7 @@ export default defineConfig({
   outDir: "dist",
   // Shebang will be added by tsup automatically for bin files
   banner: undefined,
-  external: ["@assertavenger/cypress-test-selector-core"],
+  external: ["cypress-smart-test-selection-core"],
   target: "node18",
 });
 
