@@ -96,6 +96,10 @@ export async function executeDiffCommand(
     const mappingResult = await mapDiffToTests(diffResult.files, tests, {
       safetyLevel: config.safetyLevel,
       threshold: config.threshold,
+      config: {
+        mappings: config.mappings,
+        smoke: config.smoke,
+      },
     });
 
     logger.debug(
@@ -123,4 +127,3 @@ export async function executeDiffCommand(
     return 1;
   }
 }
-

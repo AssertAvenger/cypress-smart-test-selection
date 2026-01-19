@@ -1,3 +1,5 @@
+import type { DirectoryMapping, SmokeConfig } from "cypress-smart-test-selection-core/mapper";
+
 /**
  * CLI configuration options
  */
@@ -14,6 +16,10 @@ export interface CliConfig {
   threshold?: number;
   /** Default git base branch */
   defaultBase?: string;
+  /** Explicit directory mappings from source to test paths */
+  mappings?: DirectoryMapping[];
+  /** Smoke test configuration - always included */
+  smoke?: SmokeConfig;
 }
 
 /**
@@ -35,7 +41,8 @@ export interface DiffCommandOptions {
 /**
  * Merged configuration (CLI config + defaults)
  */
-export interface MergedConfig extends Required<Omit<CliConfig, "threshold">> {
+export interface MergedConfig extends Required<Omit<CliConfig, "threshold" | "mappings" | "smoke">> {
   threshold?: number;
+  mappings?: DirectoryMapping[];
+  smoke?: SmokeConfig;
 }
-

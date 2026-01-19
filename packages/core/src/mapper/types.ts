@@ -1,9 +1,39 @@
-import type { ChangedFile } from "../diff/types.js";
-
 /**
  * Safety level for test selection
  */
 export type SafetyLevel = "high" | "moderate" | "medium" | "low";
+
+/**
+ * Directory mapping configuration
+ * Links source paths to test paths for explicit mapping
+ */
+export interface DirectoryMapping {
+  /** Source path patterns (e.g., "src/components", "src/features/auth") */
+  src: string | string[];
+  /** Test path patterns (e.g., "cypress/e2e/components", "cypress/e2e/auth") */
+  test: string | string[];
+}
+
+/**
+ * Smoke test configuration
+ * Defines tests that should always be included regardless of diff
+ */
+export interface SmokeConfig {
+  /** Glob patterns for smoke test files (e.g., "cypress/e2e/smoke/") */
+  patterns?: string[];
+  /** Tags that identify smoke tests (e.g., ["smoke", "critical"]) */
+  tags?: string[];
+}
+
+/**
+ * Mapping configuration from cypress-test-selector.config.js
+ */
+export interface MappingConfig {
+  /** Explicit directory mappings from source to test paths */
+  mappings?: DirectoryMapping[];
+  /** Smoke test configuration - always included */
+  smoke?: SmokeConfig;
+}
 
 /**
  * Mapping score for a test file
@@ -18,9 +48,7 @@ export interface TestMapping {
   heuristics: {
     directory: number;
     similarity: number;
-    importGraph: number;
     tags: number;
-    titles: number;
   };
   /** Reason for selection (for debugging/logging) */
   reason?: string;
@@ -54,12 +82,10 @@ export interface MappingOptions {
   directoryWeight?: number;
   /** Custom similarity weight (default: DEFAULT_WEIGHTS.similarityWeight) */
   similarityWeight?: number;
-  /** Custom import graph weight (default: DEFAULT_WEIGHTS.importGraphWeight) */
-  importGraphWeight?: number;
   /** Custom tag heuristic weight (default: DEFAULT_WEIGHTS.tagWeight) */
   tagWeight?: number;
-  /** Custom title heuristic weight (default: DEFAULT_WEIGHTS.titleWeight) */
-  titleWeight?: number;
+  /** Mapping configuration with explicit directory mappings and smoke tests */
+  config?: MappingConfig;
 }
 
 /**
@@ -78,15 +104,10 @@ export const SAFETY_THRESHOLDS: Record<SafetyLevel, number> = {
  * Higher weights mean the heuristic has more influence on the final score.
  */
 export const DEFAULT_WEIGHTS = {
-  /** Directory mapping weight - matches based on path segments */
+  /** Directory mapping weight - matches based on explicit config mappings */
   directoryWeight: 1.0,
   /** Filename similarity weight - matches based on token similarity */
   similarityWeight: 1.0,
-  /** Import graph weight - matches based on import dependencies */
-  importGraphWeight: 1.0,
   /** Tag heuristic weight - matches based on test tags */
   tagWeight: 0.5,
-  /** Title heuristic weight - matches based on test titles */
-  titleWeight: 0.4,
 } as const;
-

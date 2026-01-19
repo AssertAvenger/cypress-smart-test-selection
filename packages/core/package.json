@@ -1,6 +1,6 @@
 {
   "name": "cypress-smart-test-selection-core",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "Core diff parsing and intelligent mapping logic for Cypress test selection",
   "type": "module",
   "files": [

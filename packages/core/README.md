@@ -50,6 +50,14 @@ const diffResult = parseDiff(gitDiffOutput);
 const tests = await discoverTests({ projectRoot: process.cwd() });
 const mapping = await mapDiffToTests(diffResult.files, tests, {
   safetyLevel: 'medium',
+  config: {
+    mappings: [
+      { src: 'src/components', test: 'cypress/e2e/components' },
+    ],
+    smoke: {
+      tags: ['smoke'],
+    },
+  },
 });
 
 // mapping.selected - array of selected test file paths
@@ -60,9 +68,28 @@ const mapping = await mapDiffToTests(diffResult.files, tests, {
 
 - **Diff Parsing**: Robust git diff parsing supporting multiple formats
 - **Test Discovery**: Fast glob-based test file discovery
-- **Intelligent Mapping**: 5 heuristics (directory, filename, imports, tags, titles)
-- **Configurable Safety**: High/medium/low safety levels with thresholds
+- **Intelligent Mapping**: 3 heuristics (directory, filename, tags)
+- **Explicit Mappings**: Configure source-to-test path mappings
+- **Smoke Tests**: Always include critical tests
+- **Configurable Safety**: High/moderate/medium/low safety levels with thresholds
 - **TypeScript**: Fully typed with strict mode
+
+## Heuristics
+
+### Directory Mapping
+- Uses explicit configuration only
+- No filesystem proximity fallback
+- Score: 1.0 for match, 0.0 otherwise
+
+### Filename Similarity
+- Token-based matching (Dice coefficient + LCS)
+- Handles camelCase, hyphens, underscores
+- Score: 0.0 to 1.0
+
+### Tag Matching
+- Matches test tags against changed file tokens
+- Supports comment tags, inline tags, Cypress metadata
+- Score: 0.0 to 1.0
 
 ## Documentation
 
@@ -75,4 +102,3 @@ See the individual module READMEs for detailed API documentation:
 ## License
 
 MIT
-

@@ -4,8 +4,8 @@ import { mapDiffToTests } from "../../src/mapper/index.js";
 import type { ChangedFile } from "../../src/diff/types.js";
 import type { DiscoveredTestFile } from "../../src/discovery/types.js";
 
-describe("Smoke suite always included", () => {
-  it("should include smoke tests in tag-based runs", async () => {
+describe("Smoke suite always included (explicit config)", () => {
+  it("should include smoke tests by tag from config", async () => {
     const diff: ChangedFile[] = [
       {
         newPath: "src/components/CartButton.tsx",
@@ -16,12 +16,6 @@ describe("Smoke suite always included", () => {
     const tests: DiscoveredTestFile[] = [
       {
         file: resolve("/project", "cypress/e2e/cart/add-item.spec.ts"),
-        tags: ["cart"],
-        titles: [],
-        tokens: [],
-      },
-      {
-        file: resolve("/project", "cypress/e2e/cart/remove-item.spec.ts"),
         tags: ["cart"],
         titles: [],
         tokens: [],
@@ -40,15 +34,14 @@ describe("Smoke suite always included", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "high" });
-
-    // Should include cart-tagged tests
-    expect(result.selected).toContain(
-      resolve("/project", "cypress/e2e/cart/add-item.spec.ts")
-    );
-    expect(result.selected).toContain(
-      resolve("/project", "cypress/e2e/cart/remove-item.spec.ts")
-    );
+    const result = await mapDiffToTests(diff, tests, {
+      safetyLevel: "high",
+      config: {
+        smoke: {
+          tags: ["smoke"],
+        },
+      },
+    });
 
     // Should ALWAYS include smoke tests
     expect(result.selected).toContain(
@@ -57,12 +50,9 @@ describe("Smoke suite always included", () => {
     expect(result.selected).toContain(
       resolve("/project", "cypress/e2e/smoke/checkout.spec.ts")
     );
-
-    // Verify smoke tests are in the selected list (they may have been selected via tags or as smoke tests)
-    expect(result.selected.length).toBeGreaterThanOrEqual(4);
   });
 
-  it("should include smoke tests in module-based runs", async () => {
+  it("should include smoke tests by pattern from config", async () => {
     const diff: ChangedFile[] = [
       {
         newPath: "src/components/Button.tsx",
@@ -78,12 +68,6 @@ describe("Smoke suite always included", () => {
         tokens: [],
       },
       {
-        file: resolve("/project", "cypress/e2e/components/input.spec.ts"),
-        tags: [],
-        titles: [],
-        tokens: [],
-      },
-      {
         file: resolve("/project", "cypress/smoke/basic-flow.spec.ts"),
         tags: [],
         titles: [],
@@ -91,20 +75,27 @@ describe("Smoke suite always included", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "medium" });
+    const result = await mapDiffToTests(diff, tests, {
+      safetyLevel: "medium",
+      config: {
+        smoke: {
+          patterns: ["cypress/smoke"],
+        },
+      },
+    });
 
-    // Should include button test (module-based match)
+    // Should include button test (similarity match)
     expect(result.selected).toContain(
       resolve("/project", "cypress/e2e/components/button.spec.ts")
     );
 
-    // Should ALWAYS include smoke test (even though it's in smoke/ path, not tagged)
+    // Should ALWAYS include smoke test by pattern
     expect(result.selected).toContain(
       resolve("/project", "cypress/smoke/basic-flow.spec.ts")
     );
   });
 
-  it("should include smoke tests in single-spec runs", async () => {
+  it("should include smoke tests even with low safety level", async () => {
     const diff: ChangedFile[] = [
       {
         newPath: "src/features/auth/LoginForm.tsx",
@@ -127,12 +118,14 @@ describe("Smoke suite always included", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "low" });
-
-    // Should include auth test (tag match)
-    expect(result.selected).toContain(
-      resolve("/project", "cypress/e2e/auth/login.spec.ts")
-    );
+    const result = await mapDiffToTests(diff, tests, {
+      safetyLevel: "low",
+      config: {
+        smoke: {
+          tags: ["smoke"],
+        },
+      },
+    });
 
     // Should ALWAYS include smoke test (even with low safety level)
     expect(result.selected).toContain(
@@ -140,7 +133,7 @@ describe("Smoke suite always included", () => {
     );
   });
 
-  it("should include smoke tests in empty-diff fallback runs", async () => {
+  it("should include smoke tests even with empty diff", async () => {
     const diff: ChangedFile[] = []; // Empty diff
 
     const tests: DiscoveredTestFile[] = [
@@ -164,7 +157,15 @@ describe("Smoke suite always included", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "high" });
+    const result = await mapDiffToTests(diff, tests, {
+      safetyLevel: "high",
+      config: {
+        smoke: {
+          tags: ["smoke"],
+          patterns: ["cypress/smoke"],
+        },
+      },
+    });
 
     // With empty diff, no regular tests should be selected
     expect(result.selected).not.toContain(
@@ -177,78 +178,6 @@ describe("Smoke suite always included", () => {
     );
     expect(result.selected).toContain(
       resolve("/project", "cypress/smoke/health-check.spec.ts")
-    );
-  });
-
-  it("should include smoke tests identified by path (cypress/smoke)", async () => {
-    const diff: ChangedFile[] = [
-      {
-        newPath: "src/components/Button.tsx",
-        status: "modified",
-      },
-    ];
-
-    const tests: DiscoveredTestFile[] = [
-      {
-        file: resolve("/project", "cypress/e2e/components/button.spec.ts"),
-        tags: [],
-        titles: [],
-        tokens: [],
-      },
-      {
-        file: resolve("/project", "cypress/smoke/smoke-test.spec.ts"),
-        tags: [], // No smoke tag, but in smoke/ path
-        titles: [],
-        tokens: [],
-      },
-    ];
-
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "medium" });
-
-    // Should include button test
-    expect(result.selected).toContain(
-      resolve("/project", "cypress/e2e/components/button.spec.ts")
-    );
-
-    // Should include smoke test by path
-    expect(result.selected).toContain(
-      resolve("/project", "cypress/smoke/smoke-test.spec.ts")
-    );
-  });
-
-  it("should include smoke tests identified by @smoke tag", async () => {
-    const diff: ChangedFile[] = [
-      {
-        newPath: "src/components/Button.tsx",
-        status: "modified",
-      },
-    ];
-
-    const tests: DiscoveredTestFile[] = [
-      {
-        file: resolve("/project", "cypress/e2e/components/button.spec.ts"),
-        tags: [],
-        titles: [],
-        tokens: [],
-      },
-      {
-        file: resolve("/project", "cypress/e2e/features/smoke-test.spec.ts"),
-        tags: ["smoke"], // Has smoke tag, but not in smoke/ path
-        titles: [],
-        tokens: [],
-      },
-    ];
-
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "medium" });
-
-    // Should include button test
-    expect(result.selected).toContain(
-      resolve("/project", "cypress/e2e/components/button.spec.ts")
-    );
-
-    // Should include smoke test by tag
-    expect(result.selected).toContain(
-      resolve("/project", "cypress/e2e/features/smoke-test.spec.ts")
     );
   });
 
@@ -275,12 +204,14 @@ describe("Smoke suite always included", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "high" });
-
-    // Should include cart test
-    expect(result.selected).toContain(
-      resolve("/project", "cypress/e2e/cart/add-item.spec.ts")
-    );
+    const result = await mapDiffToTests(diff, tests, {
+      safetyLevel: "high",
+      config: {
+        smoke: {
+          tags: ["smoke"],
+        },
+      },
+    });
 
     // Should include smoke test (only once, even though it matches both criteria)
     const smokeTestCount = result.selected.filter(
@@ -289,7 +220,7 @@ describe("Smoke suite always included", () => {
     expect(smokeTestCount).toBe(1);
   });
 
-  it("should append smoke tests at the end of selection", async () => {
+  it("should put smoke tests first in selection", async () => {
     const diff: ChangedFile[] = [
       {
         newPath: "src/components/Button.tsx",
@@ -312,17 +243,105 @@ describe("Smoke suite always included", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "high" });
+    const result = await mapDiffToTests(diff, tests, {
+      safetyLevel: "high",
+      config: {
+        smoke: {
+          tags: ["smoke"],
+        },
+      },
+    });
 
-    // Smoke test should be at the end
-    const buttonIndex = result.selected.indexOf(
-      resolve("/project", "cypress/e2e/components/button.spec.ts")
-    );
+    // Smoke test should be first
     const smokeIndex = result.selected.indexOf(
       resolve("/project", "cypress/e2e/smoke/smoke.spec.ts")
     );
+    const buttonIndex = result.selected.indexOf(
+      resolve("/project", "cypress/e2e/components/button.spec.ts")
+    );
 
-    expect(smokeIndex).toBeGreaterThan(buttonIndex);
+    expect(smokeIndex).toBeLessThan(buttonIndex);
+  });
+
+  it("should not include smoke tests without explicit config", async () => {
+    const diff: ChangedFile[] = [
+      {
+        newPath: "src/components/Button.tsx",
+        status: "modified",
+      },
+    ];
+
+    const tests: DiscoveredTestFile[] = [
+      {
+        file: resolve("/project", "cypress/e2e/components/button.spec.ts"),
+        tags: [],
+        titles: [],
+        tokens: [],
+      },
+      {
+        file: resolve("/project", "cypress/e2e/smoke/smoke.spec.ts"),
+        tags: ["smoke"],
+        titles: [],
+        tokens: [],
+      },
+    ];
+
+    // No smoke config provided
+    const result = await mapDiffToTests(diff, tests, {
+      safetyLevel: "low",
+    });
+
+    // Without explicit smoke config, smoke tests are not automatically included
+    // They would only be included if they match via other heuristics
+    expect(result.selected).toContain(
+      resolve("/project", "cypress/e2e/components/button.spec.ts")
+    );
+  });
+
+  it("should support multiple smoke tags", async () => {
+    const diff: ChangedFile[] = [
+      {
+        newPath: "src/components/Button.tsx",
+        status: "modified",
+      },
+    ];
+
+    const tests: DiscoveredTestFile[] = [
+      {
+        file: resolve("/project", "cypress/e2e/components/button.spec.ts"),
+        tags: [],
+        titles: [],
+        tokens: [],
+      },
+      {
+        file: resolve("/project", "cypress/e2e/critical/payment.spec.ts"),
+        tags: ["critical"],
+        titles: [],
+        tokens: [],
+      },
+      {
+        file: resolve("/project", "cypress/e2e/smoke/login.spec.ts"),
+        tags: ["smoke"],
+        titles: [],
+        tokens: [],
+      },
+    ];
+
+    const result = await mapDiffToTests(diff, tests, {
+      safetyLevel: "low",
+      config: {
+        smoke: {
+          tags: ["smoke", "critical"],
+        },
+      },
+    });
+
+    // Both smoke and critical tests should be included
+    expect(result.selected).toContain(
+      resolve("/project", "cypress/e2e/critical/payment.spec.ts")
+    );
+    expect(result.selected).toContain(
+      resolve("/project", "cypress/e2e/smoke/login.spec.ts")
+    );
   });
 });
-

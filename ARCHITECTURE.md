@@ -13,20 +13,21 @@ cypress-test-selector/
 │   │   │   │   └── types.ts                # Diff-related types
 │   │   │   ├── mapper/
 │   │   │   │   ├── index.ts                # Main mapping orchestrator
-│   │   │   │   ├── directory-heuristic.ts  # Directory-based mapping
+│   │   │   │   ├── directory-heuristic.ts  # Explicit config-based mapping
 │   │   │   │   ├── similarity-heuristic.ts # File similarity mapping
-│   │   │   │   ├── import-graph.ts         # Import graph analysis
-│   │   │   │   └── conservative.ts         # Conservative fallback strategy
-│   │   │   ├── safety/
-│   │   │   │   ├── levels.ts               # Safety level definitions
-│   │   │   │   └── validator.ts            # High-safety mode guarantees
+│   │   │   │   ├── tag-heuristic.ts        # Tag-based matching
+│   │   │   │   ├── scoring.ts              # Score combination logic
+│   │   │   │   ├── safety.ts               # Safety level filtering
+│   │   │   │   └── types.ts                # Mapper types
+│   │   │   ├── discovery/
+│   │   │   │   ├── discoverTests.ts        # Find Cypress test files
+│   │   │   │   └── metadata.ts             # Extract test metadata
 │   │   │   └── utils/
-│   │   │       ├── file-utils.ts           # File path utilities
-│   │   │       └── test-discovery.ts       # Find Cypress test files
+│   │   │       └── file-utils.ts           # File path utilities
 │   │   ├── tests/
 │   │   │   ├── diff/
 │   │   │   ├── mapper/
-│   │   │   └── safety/
+│   │   │   └── discovery/
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   │
@@ -34,11 +35,11 @@ cypress-test-selector/
 │       ├── src/
 │       │   ├── cli.ts                      # CLI entry point
 │       │   ├── commands/
-│       │   │   └── run.ts                  # Main run command
+│       │   │   └── diff.ts                 # Main diff command
 │       │   ├── config/
-│       │   │   └── loader.ts               # Config file loading
+│       │   │   └── loadConfig.ts           # Config file loading
 │       │   └── output/
-│       │       └── writer.ts               # JSON output writer
+│       │       └── formatters.ts           # Output formatting
 │       ├── tests/
 │       ├── package.json
 │       └── tsconfig.json
@@ -68,24 +69,31 @@ cypress-test-selector/
    - Handle various git diff formats
 
 2. **Mapping Logic** (`mapper/`)
-   - **Directory Heuristic**: Map based on directory structure
-     - `src/components/Button.tsx` → `cypress/e2e/components/button.spec.ts`
-     - `src/features/auth/login.tsx` → `cypress/e2e/features/auth/login.spec.ts`
+   - **Directory Heuristic**: Explicit config-based mapping only
+     - Uses `mappings` configuration to link source paths to test paths
+     - No filesystem proximity fallback
+     - Score: 1.0 for match, 0.0 otherwise
    - **Similarity Heuristic**: File name similarity matching
+     - Token-based matching using Dice coefficient and LCS
      - `Button.tsx` → `button.spec.ts`, `Button.spec.ts`
-   - **Import Graph**: Lightweight analysis of imports
-     - Track which test files import/use which source files
-   - **Conservative Strategy**: When uncertain, include more tests
+   - **Tag Heuristic**: Test tag matching
+     - Matches test tags against changed file tokens
+     - Supports comment tags, inline tags, Cypress metadata
 
-3. **Safety Levels** (`safety/`)
+3. **Smoke Tests**
+   - Explicit configuration via `smoke` config section
+   - Always included regardless of diff, safety level, or other heuristics
+   - Union operation - never filtered out
+
+4. **Safety Levels** (`safety/`)
    - **High**: Guarantee no test silently skipped (may include extra tests)
+   - **Moderate**: Between high and medium
    - **Medium**: Balanced selection with reasonable confidence
    - **Low**: Aggressive filtering (may miss some tests)
 
-4. **Utilities** (`utils/`)
+5. **Discovery** (`discovery/`)
    - Test file discovery (`cypress/e2e/**/*.spec.ts`)
-   - File path normalization and matching
-   - Pattern matching utilities
+   - Metadata extraction (tags, titles, tokens)
 
 ## CLI Package (`packages/cli`)
 
@@ -93,30 +101,49 @@ cypress-test-selector/
 
 1. **Command Interface** (`cli.ts`)
    - Parse command-line arguments
-   - Handle `--diff`, `--safety-level`, `--pattern`, `--json`, `--write-output`
+   - Handle `--diff`, `--safety-level`, `--pattern`, `--json`, `--verbose`
    - Exit codes: 0 (OK), 1 (errors)
 
 2. **Configuration** (`config/`)
-   - Load config from file (`.cypress-test-selector.json` or similar)
+   - Load config from `cypress-test-selector.config.js`
+   - Load config from `package.json` "cypress-test-selector" key
    - Merge CLI args with config file
-   - Default values
+   - Validate configuration (fail loudly on invalid config)
 
 3. **Output** (`output/`)
-   - Generate `selected-tests.json` with:
-     - Array of selected test file paths
-     - Metadata (reason for selection, confidence, etc.)
-   - Console output for human-readable format
+   - Generate JSON output with selected test paths
+   - Human-readable console output
+   - Verbose mode with scoring breakdown
 
-## Example App (`examples/demo-app`)
+## Configuration
 
-### Purpose
+### `cypress-test-selector.config.js`
 
-- Demonstrate tool usage
-- Provide integration test environment
-- Show realistic directory structure:
-  - `src/components/` → `cypress/e2e/components/`
-  - `src/features/` → `cypress/e2e/features/`
-  - Various naming patterns
+```javascript
+module.exports = {
+  // Explicit directory mappings (required for directory-based matching)
+  mappings: [
+    { src: 'src/components', test: 'cypress/e2e/components' },
+    { src: 'src/features/auth', test: 'cypress/e2e/auth' },
+    { src: ['src/utils', 'lib/utils'], test: 'cypress/e2e/utils' },
+  ],
+
+  // Smoke tests - always included regardless of diff
+  smoke: {
+    tags: ['smoke', 'critical'],
+    patterns: ['cypress/smoke/**'],
+  },
+
+  // Safety level
+  safetyLevel: 'medium',
+
+  // Test patterns
+  testPatterns: ['cypress/e2e/**/*.spec.ts'],
+
+  // Exclusions
+  exclude: ['**/node_modules/**'],
+};
+```
 
 ## Data Flow
 
@@ -125,15 +152,14 @@ cypress-test-selector/
 2. Core parses diff → ChangedFile[]
 3. Core discovers all Cypress test files
 4. Core applies mapping heuristics:
-   - Directory heuristic
+   - Directory heuristic (explicit config only)
    - Similarity heuristic
-   - Import graph analysis
    - Tag heuristic
-   - Title heuristic
-5. Core applies safety level filter
-6. Core validates (high-safety mode: ensure no silent skips)
-7. CLI outputs selected-tests.json
-8. CLI exits with appropriate code
+5. Core identifies smoke tests (always included)
+6. Core applies safety level filter
+7. Core combines smoke tests + filtered tests
+8. CLI outputs selected-tests.json
+9. CLI exits with appropriate code
 ```
 
 ## Key Design Decisions
@@ -143,4 +169,14 @@ cypress-test-selector/
 3. **Vitest**: Fast, modern testing framework
 4. **Configurable Safety**: Balance between precision and safety
 5. **JSON Output**: CI-friendly, machine-readable
-6. **No Silent Skips**: High-safety mode guarantees comprehensive coverage
+6. **Explicit Mappings**: No magic filesystem proximity heuristics
+7. **Smoke Test Guarantee**: Critical tests always run
+8. **Fail Loudly**: Invalid config causes immediate failure
+
+## Removed Features
+
+The following features have been intentionally removed:
+
+- **Import Graph Heuristic**: Removed for simplicity and determinism
+- **Title-based Heuristic**: Titles are human-readable only, not used for selection
+- **Filesystem Proximity**: Directory matching requires explicit configuration

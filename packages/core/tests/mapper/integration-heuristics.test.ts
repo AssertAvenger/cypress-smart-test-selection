@@ -11,9 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const FIXTURES_ROOT = resolve(__dirname, "../fixtures/mapping");
 
-describe("integration: tag and title heuristics", () => {
+describe("integration: tag heuristic", () => {
   it("should use tag heuristic when test has matching tags", async () => {
-    // Create a test file with tags
     const testFile = resolve(FIXTURES_ROOT, "test-files/cypress/e2e/tagged-test.spec.ts");
     const testContent = `// @tag: login
 // @tags: auth,button
@@ -30,7 +29,6 @@ describe("[login] Login button tests", () => {
       },
     ];
 
-    // Discover tests with metadata
     const discovered = await discoverTests({
       projectRoot: resolve(FIXTURES_ROOT, "test-files"),
       extractMetadata: true,
@@ -46,55 +44,13 @@ describe("[login] Login button tests", () => {
 
       expect(result.mappings.length).toBeGreaterThan(0);
       const mapping = result.mappings[0];
-      // Tag heuristic should contribute to score
       expect(mapping.heuristics.tags).toBeGreaterThan(0.0);
     }
 
     await unlink(testFile).catch(() => {});
   });
 
-  it("should use title heuristic when test titles match", async () => {
-    // Create a test file with matching titles
-    const testFile = resolve(FIXTURES_ROOT, "test-files/cypress/e2e/title-test.spec.ts");
-    const testContent = `describe("LoginForm component tests", () => {
-  it("should render login form", () => {});
-  it("should handle login submission", () => {});
-});`;
-
-    await writeFile(testFile, testContent, "utf-8");
-
-    const diff: ChangedFile[] = [
-      {
-        newPath: "src/components/LoginForm.tsx",
-        status: "modified",
-      },
-    ];
-
-    // Discover tests with metadata
-    const discovered = await discoverTests({
-      projectRoot: resolve(FIXTURES_ROOT, "test-files"),
-      extractMetadata: true,
-    });
-
-    const tests = discovered as DiscoveredTestFile[];
-    const titleTest = tests.find((t) => t.file.includes("title-test"));
-
-    if (titleTest) {
-      const result = await mapDiffToTests(diff, [titleTest], {
-        safetyLevel: "high",
-      });
-
-      expect(result.mappings.length).toBeGreaterThan(0);
-      const mapping = result.mappings[0];
-      // Title heuristic should contribute to score
-      expect(mapping.heuristics.titles).toBeGreaterThan(0.0);
-    }
-
-    await unlink(testFile).catch(() => {});
-  });
-
-  it("should combine all heuristics in scoring", async () => {
-    // Create a test file with tags and titles
+  it("should combine directory and similarity heuristics in scoring", async () => {
     const testFile = resolve(FIXTURES_ROOT, "test-files/cypress/e2e/combined-test.spec.ts");
     const testContent = `// @tag: button
 describe("Button component", () => {
@@ -110,7 +66,6 @@ describe("Button component", () => {
       },
     ];
 
-    // Discover tests with metadata
     const discovered = await discoverTests({
       projectRoot: resolve(FIXTURES_ROOT, "test-files"),
       extractMetadata: true,
@@ -127,19 +82,54 @@ describe("Button component", () => {
       expect(result.mappings.length).toBeGreaterThan(0);
       const mapping = result.mappings[0];
       
-      // All heuristics should be present
       expect(mapping.heuristics.directory).toBeGreaterThanOrEqual(0.0);
       expect(mapping.heuristics.similarity).toBeGreaterThanOrEqual(0.0);
-      expect(mapping.heuristics.importGraph).toBeGreaterThanOrEqual(0.0);
       expect(mapping.heuristics.tags).toBeGreaterThanOrEqual(0.0);
-      expect(mapping.heuristics.titles).toBeGreaterThanOrEqual(0.0);
-      
-      // Combined score should reflect all heuristics
       expect(mapping.score).toBeGreaterThan(0.0);
     }
 
     await unlink(testFile).catch(() => {});
   });
+
+  it("should use explicit directory mappings when provided", async () => {
+    const diff: ChangedFile[] = [
+      {
+        newPath: "src/features/auth/LoginForm.tsx",
+        status: "modified",
+      },
+    ];
+
+    const tests: DiscoveredTestFile[] = [
+      {
+        file: resolve("/project", "cypress/e2e/auth/login.spec.ts"),
+        tags: [],
+        titles: [],
+        tokens: [],
+      },
+      {
+        file: resolve("/project", "cypress/e2e/unrelated/other.spec.ts"),
+        tags: [],
+        titles: [],
+        tokens: [],
+      },
+    ];
+
+    const result = await mapDiffToTests(diff, tests, {
+      safetyLevel: "high",
+      config: {
+        mappings: [
+          { src: "src/features/auth", test: "cypress/e2e/auth" },
+        ],
+      },
+    });
+
+    const authMapping = result.mappings.find((m) => m.testPath.includes("auth"));
+    expect(authMapping).toBeDefined();
+    expect(authMapping?.heuristics.directory).toBe(1.0);
+
+    const unrelatedMapping = result.mappings.find((m) => m.testPath.includes("unrelated"));
+    if (unrelatedMapping) {
+      expect(unrelatedMapping.heuristics.directory).toBe(0.0);
+    }
+  });
 });
-
-

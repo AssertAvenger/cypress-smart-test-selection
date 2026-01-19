@@ -1,6 +1,6 @@
 {
   "name": "cypress-smart-test-selection",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "CLI tool for intelligent Cypress test selection based on git diffs",
   "type": "module",
   "bin": {
@@ -40,7 +40,7 @@
     "url": "https://github.com/AssertAvenger/cypress-smart-test-selection/issues"
   },
   "dependencies": {
-    "cypress-smart-test-selection-core": "^1.0.0"
+    "cypress-smart-test-selection-core": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

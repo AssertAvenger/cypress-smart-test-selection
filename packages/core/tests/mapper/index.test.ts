@@ -3,13 +3,14 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mapDiffToTests } from "../../src/mapper/index.js";
 import type { ChangedFile } from "../../src/diff/types.js";
+import type { DiscoveredTestFile } from "../../src/discovery/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const FIXTURES_ROOT = resolve(__dirname, "../fixtures/mapping");
 
 describe("mapDiffToTests", () => {
-  it("should map changed files to test files", async () => {
+  it("should map changed files to test files using similarity", async () => {
     const diff: ChangedFile[] = [
       {
         newPath: "src/components/Button.tsx",
@@ -104,9 +105,7 @@ describe("mapDiffToTests", () => {
     expect(mapping.heuristics).toBeDefined();
     expect(mapping.heuristics.directory).toBeGreaterThanOrEqual(0.0);
     expect(mapping.heuristics.similarity).toBeGreaterThanOrEqual(0.0);
-    expect(mapping.heuristics.importGraph).toBeGreaterThanOrEqual(0.0);
     expect(mapping.heuristics.tags).toBeGreaterThanOrEqual(0.0);
-    expect(mapping.heuristics.titles).toBeGreaterThanOrEqual(0.0);
   });
 
   it("should sort mappings by score (descending)", async () => {
@@ -183,5 +182,124 @@ describe("mapDiffToTests", () => {
     // Should find matches for both changed files
     expect(result.selected.length).toBeGreaterThan(0);
   });
-});
 
+  it("should use explicit directory mappings from config", async () => {
+    const diff: ChangedFile[] = [
+      {
+        newPath: "src/features/auth/LoginForm.tsx",
+        status: "modified",
+      },
+    ];
+
+    const tests: DiscoveredTestFile[] = [
+      {
+        file: resolve("/project", "cypress/e2e/auth/login.spec.ts"),
+        tags: [],
+        titles: [],
+        tokens: [],
+      },
+      {
+        file: resolve("/project", "cypress/e2e/components/button.spec.ts"),
+        tags: [],
+        titles: [],
+        tokens: [],
+      },
+    ];
+
+    const result = await mapDiffToTests(diff, tests, {
+      safetyLevel: "high",
+      config: {
+        mappings: [
+          { src: "src/features/auth", test: "cypress/e2e/auth" },
+        ],
+      },
+    });
+
+    // Should match auth test via directory mapping
+    const authMapping = result.mappings.find((m) => m.testPath.includes("auth"));
+    expect(authMapping).toBeDefined();
+    expect(authMapping?.heuristics.directory).toBe(1.0);
+  });
+
+  it("should always include smoke tests from config", async () => {
+    const diff: ChangedFile[] = [
+      {
+        newPath: "src/components/Button.tsx",
+        status: "modified",
+      },
+    ];
+
+    const tests: DiscoveredTestFile[] = [
+      {
+        file: resolve("/project", "cypress/e2e/components/button.spec.ts"),
+        tags: [],
+        titles: [],
+        tokens: [],
+      },
+      {
+        file: resolve("/project", "cypress/e2e/smoke/critical.spec.ts"),
+        tags: ["smoke"],
+        titles: [],
+        tokens: [],
+      },
+      {
+        file: resolve("/project", "cypress/e2e/unrelated.spec.ts"),
+        tags: [],
+        titles: [],
+        tokens: [],
+      },
+    ];
+
+    const result = await mapDiffToTests(diff, tests, {
+      safetyLevel: "low", // Even with low safety, smoke tests should be included
+      config: {
+        smoke: {
+          tags: ["smoke"],
+        },
+      },
+    });
+
+    // Smoke test should always be included
+    expect(result.selected).toContain(
+      resolve("/project", "cypress/e2e/smoke/critical.spec.ts")
+    );
+  });
+
+  it("should include smoke tests by pattern", async () => {
+    const diff: ChangedFile[] = [
+      {
+        newPath: "src/components/Button.tsx",
+        status: "modified",
+      },
+    ];
+
+    const tests: DiscoveredTestFile[] = [
+      {
+        file: resolve("/project", "cypress/e2e/components/button.spec.ts"),
+        tags: [],
+        titles: [],
+        tokens: [],
+      },
+      {
+        file: resolve("/project", "cypress/smoke/health-check.spec.ts"),
+        tags: [],
+        titles: [],
+        tokens: [],
+      },
+    ];
+
+    const result = await mapDiffToTests(diff, tests, {
+      safetyLevel: "medium",
+      config: {
+        smoke: {
+          patterns: ["cypress/smoke"],
+        },
+      },
+    });
+
+    // Smoke test should be included by pattern
+    expect(result.selected).toContain(
+      resolve("/project", "cypress/smoke/health-check.spec.ts")
+    );
+  });
+});
