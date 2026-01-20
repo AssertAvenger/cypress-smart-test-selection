@@ -1,4 +1,4 @@
-# cypress-test-selector
+# cypress-smart-test-selection
 
 Intelligent Cypress test selection based on git diffs. Mimics enterprise-grade Test Impact Analysis for Cypress frameworks.
 
