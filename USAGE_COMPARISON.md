@@ -26,7 +26,7 @@ cy-select diff --base HEAD~1 --json
 
 ```bash
 # 1. Install
-npm install cypress-test-selector
+npm install cypress-smart-test-selection
 
 # 2. Optional: Create config file (or use defaults)
 echo 'export default { safetyLevel: "medium" };' > cypress-test-selector.config.js
@@ -52,8 +52,8 @@ cy-select diff
 Output:
 ```
 Selected 12 tests:
-  multi-cart-delete.spec.ts
-  multi-cart-purchase-partial.spec.ts
+  login.spec.ts
+  cart.spec.ts
   ...
 ```
 
