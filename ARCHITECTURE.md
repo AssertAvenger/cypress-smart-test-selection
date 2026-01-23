@@ -3,7 +3,7 @@
 ## Directory Structure
 
 ```
-cypress-test-selector/
+cypress-smart-test-selection/
 ├── packages/
 │   ├── core/
 │   │   ├── src/
@@ -117,7 +117,7 @@ cypress-test-selector/
 
 ## Configuration
 
-### `cypress-test-selector.config.js`
+### `cypress-smart-test-selection.config.js`
 
 ```javascript
 module.exports = {
