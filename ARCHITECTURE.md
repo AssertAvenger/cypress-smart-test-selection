@@ -105,8 +105,8 @@ cypress-smart-test-selection/
    - Exit codes: 0 (OK), 1 (errors)
 
 2. **Configuration** (`config/`)
-   - Load config from `cypress-test-selector.config.js`
-   - Load config from `package.json` "cypress-test-selector" key
+   - Load config from `cypress-smart-test-selection.config.js`
+   - Load config from `package.json` "cypress-smart-test-selection" key
    - Merge CLI args with config file
    - Validate configuration (fail loudly on invalid config)
 
