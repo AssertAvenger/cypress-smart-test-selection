@@ -103,9 +103,9 @@ npx cy-select diff --verbose
 Output:
 ```
 Selected 12 tests:
-  multi-cart-delete.spec.ts
-  multi-cart-purchase-partial.spec.ts
-  search-and-checkout-shop.spec.ts
+  login.spec.ts
+  home-page.spec.ts
+  cart.spec.ts
   ...
 
 Safety level: moderate (threshold: 0.2)
