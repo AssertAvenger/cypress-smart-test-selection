@@ -30,6 +30,8 @@ export interface RawDiffEntry {
  * Options for parsing git diff output
  */
 export interface ParseOptions {
+  /** Explicit machine format used by the CLI; preferred over legacy auto-detection. */
+  format?: "name-status-z";
   /** Whether to include binary files (default: false) */
   includeBinary?: boolean;
   /** Whether to include untracked files (default: false) */

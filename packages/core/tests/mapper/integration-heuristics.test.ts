@@ -38,7 +38,7 @@ describe("[login] Login button tests", () => {
     const taggedTest = tests.find((t) => t.file.includes("tagged-test"));
 
     if (taggedTest) {
-      const result = await mapDiffToTests(diff, [taggedTest], {
+      const result = await mapDiffToTests(diff, [taggedTest], { mode: "heuristic",
         safetyLevel: "high",
       });
 
@@ -75,7 +75,7 @@ describe("Button component", () => {
     const combinedTest = tests.find((t) => t.file.includes("combined-test"));
 
     if (combinedTest) {
-      const result = await mapDiffToTests(diff, [combinedTest], {
+      const result = await mapDiffToTests(diff, [combinedTest], { mode: "heuristic",
         safetyLevel: "high",
       });
 
@@ -114,7 +114,7 @@ describe("Button component", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { mode: "heuristic", projectRoot: "/project",
       safetyLevel: "high",
       config: {
         mappings: [

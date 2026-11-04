@@ -1,134 +1,77 @@
-# Quick Start Guide
+# Local quick start
 
-## Real-World Usage (It's Simple!)
+These instructions describe the unreleased source implementation.
 
-### Step 1: Install (One Command)
+## Build and verify
 
-```bash
-npm install cypress-smart-test-selection
-```
+Use Node 22.12+ and pnpm 11.25.0:
 
-Or with other package managers:
-```bash
-yarn add cypress-smart-test-selection
-pnpm add cypress-smart-test-selection
-```
+~~~sh
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm build
+pnpm typecheck
+pnpm test
+~~~
 
-### Step 2: Configure (One-Time, Optional)
+## Configure a consumer
 
-Create `cypress-test-selector.config.js` in your project root:
+Create **cypress-test-selector.config.mjs** in the consumer project:
 
-```javascript
+~~~js
 export default {
-  testPatterns: ["cypress/**/*.spec.ts"],
-  safetyLevel: "medium", // or "high", "moderate", "low"
   defaultBase: "origin/main",
+  mappings: [
+    { src: "src/auth", test: "cypress/e2e/auth" },
+    { src: "src/cart", test: "cypress/e2e/cart" },
+  ],
+  smoke: { patterns: ["cypress/e2e/smoke/**/*.cy.ts"] },
+  fullSuiteOnChange: ["src/shared/**"],
 };
-```
+~~~
 
-**That's it!** You can skip this step and use defaults.
+Use .cjs with module.exports for CommonJS, or JSON for non-executable config.
 
-### Step 3: Use It (One Command)
+~~~sh
+node /absolute/path/to/selector/packages/cli/dist/bin/cy-select.js \
+  --root /absolute/path/to/consumer --base origin/main --json
+~~~
 
-Run the command using your package manager:
+An auth change selects auth and smoke specs. An unmapped application change, dependency manifest or shared-support change selects the full discovered suite.
 
-**Using npx (Recommended):**
-```bash
-# Basic usage - compares against default branch
-npx cy-select diff
+## CI consumption
 
-# Compare against specific commit/branch
-npx cy-select diff --base origin/develop
+Check out the intended branch and fetch enough target-branch history for the merge-base. Pass the target ref explicitly. Write output outside the repository or ignore its path in Git, so it does not become a new untracked input.
 
-# Get JSON output (for CI/CD)
-npx cy-select diff --json
+Ignore generated Cypress artifacts in the consumer's `.gitignore`, too:
 
-# See detailed scoring (for debugging)
-npx cy-select diff --verbose
-```
+~~~gitignore
+cypress/downloads/
+cypress/screenshots/
+cypress/videos/
+~~~
 
-**Using yarn/pnpm:**
-```bash
-# yarn
-yarn cy-select diff
+Without these rules, a browser-generated download can become an unmapped change and correctly trigger a full suite on the next invocation. Use your configured output paths if they differ. Git ignores apply to untracked files; changes to tracked files are still considered. Do not ignore the entire Cypress directory.
 
-# pnpm
-pnpm cy-select diff
-```
+The consuming job must:
 
-**Using npm scripts (Optional):**
-Add to your `package.json`:
-```json
-{
-  "scripts": {
-    "cy-select": "cy-select"
-  }
-}
-```
+1. Stop on selector errors (exit 1 or 2).
+2. Parse the complete JSON object.
+3. Skip only when status is **no-changes**.
+4. For **selected** or **full-suite**, run returned specs from the returned projectRoot.
+5. Retain fallbackReasons for diagnosis.
 
-Then run:
-```bash
-npm run cy-select diff
-```
+Do not interpolate spec paths into shell command strings. Use Cypress's supported argument/API interface and account for its handling of spec globs and filenames. This package returns a plan; it does not implement a Cypress runner.
 
-## Typical Workflows
+Keep Cypress's `specPattern` aligned with the selector's `testPatterns`. When using `cypress.run()`, a resolved promise does not mean all assertions passed: treat `status: "failed"` as a run error and propagate a non-zero exit when `totalFailed > 0`. Never pass an empty `spec` value as a substitute for skipping the run.
 
-### Local Development
+## Heuristic experiments
 
-```bash
-# Before committing, see which tests would run
-npx cy-select diff
+~~~js
+export default {
+  mode: "heuristic",
+  defaultBase: "origin/main",
+  safetyLevel: "medium",
+};
+~~~
 
-# Compare against main branch
-npx cy-select diff --base origin/main
-```
-
-### CI/CD Pipeline
-
-```bash
-# In your CI script
-npx cy-select diff --base origin/main --json > selected-tests.json
-
-# Then run Cypress with selected tests
-npx cypress run --spec "$(cat selected-tests.json | jq -r '.selected[]' | tr '\n' ',')"
-```
-
-### Debugging
-
-```bash
-# See why tests were selected
-npx cy-select diff --verbose
-```
-
-Output:
-```
-Selected 12 tests:
-  login.spec.ts
-  home-page.spec.ts
-  cart.spec.ts
-  ...
-
-Safety level: moderate (threshold: 0.2)
-```
-
-## Common Use Cases
-
-### 1. Pre-commit Check
-```bash
-npx cy-select diff
-```
-
-### 2. PR Validation (CI)
-```bash
-npx cy-select diff --base origin/main --json
-```
-
-### 3. Debug Test Selection
-```bash
-npx cy-select diff --verbose
-```
-
-### 4. Custom Test Patterns
-```bash
-npx cy-select diff --pattern "**/*.spec.ts" --pattern "**/*.test.ts"
-```
+Run alongside full suites before letting this gate CI. The legacy safety labels are threshold presets, not guarantees against missed failures.

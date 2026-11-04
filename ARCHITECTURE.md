@@ -1,182 +1,89 @@
-# Architecture Plan
+# Architecture and engineering review
 
-## Directory Structure
+## Assessment
 
-```
-cypress-smart-test-selection/
-├── packages/
-│   ├── core/
-│   │   ├── src/
-│   │   │   ├── index.ts                    # Main export
-│   │   │   ├── diff/
-│   │   │   │   ├── parser.ts               # Git diff parsing
-│   │   │   │   └── types.ts                # Diff-related types
-│   │   │   ├── mapper/
-│   │   │   │   ├── index.ts                # Main mapping orchestrator
-│   │   │   │   ├── directory-heuristic.ts  # Explicit config-based mapping
-│   │   │   │   ├── similarity-heuristic.ts # File similarity mapping
-│   │   │   │   ├── tag-heuristic.ts        # Tag-based matching
-│   │   │   │   ├── scoring.ts              # Score combination logic
-│   │   │   │   ├── safety.ts               # Safety level filtering
-│   │   │   │   └── types.ts                # Mapper types
-│   │   │   ├── discovery/
-│   │   │   │   ├── discoverTests.ts        # Find Cypress test files
-│   │   │   │   └── metadata.ts             # Extract test metadata
-│   │   │   └── utils/
-│   │   │       └── file-utils.ts           # File path utilities
-│   │   ├── tests/
-│   │   │   ├── diff/
-│   │   │   ├── mapper/
-│   │   │   └── discovery/
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   │
-│   └── cli/
-│       ├── src/
-│       │   ├── cli.ts                      # CLI entry point
-│       │   ├── commands/
-│       │   │   └── diff.ts                 # Main diff command
-│       │   ├── config/
-│       │   │   └── loadConfig.ts           # Config file loading
-│       │   └── output/
-│       │       └── formatters.ts           # Output formatting
-│       ├── tests/
-│       ├── package.json
-│       └── tsconfig.json
-│
-├── examples/
-│   └── demo-app/
-│       ├── src/                            # React app source
-│       ├── cypress/
-│       │   ├── e2e/
-│       │   │   └── **/*.spec.ts            # Demo test files
-│       │   └── support/
-│       ├── package.json
-│       └── tsconfig.json
-│
-├── package.json                            # Root workspace config
-├── tsconfig.base.json                      # Shared TS config
-└── README.md
-```
+The useful separation was already present: a reusable core and a CLI adapter. A framework rewrite or dependency graph engine is not necessary to make this project dependable. The main problems were unsafe failure behaviour, ambiguous selection semantics, inconsistent path handling and an unreliable development/package workflow.
 
-## Core Package (`packages/core`)
+This redesign keeps two packages and makes the contract explicit. This implementation is not yet released to npm; package version numbers have not been advanced.
 
-### Responsibilities
+## Issues found and addressed
 
-1. **Diff Parsing** (`diff/`)
-   - Parse git diff output (file-level and granular)
-   - Extract changed files, lines, and change types
-   - Handle various git diff formats
+| Finding | Consequence | Change |
+| --- | --- | --- |
+| Git commands used shell interpolation and swallowed failures | Invalid refs could look like no changes; ref text could become shell syntax | Argument-based execution, verified commits, explicit merge-base and actionable errors |
+| Diffs omitted untracked paths and used line-based names | Incomplete changes and broken unusual filenames | Net merge-base-to-worktree diff plus untracked paths; strict NUL parsing |
+| Rename heuristics preferred only the new path | Old feature area could be omitted | Evaluate both paths independently |
+| Filename/tag matches were treated as sufficient coverage | Unrelated changes could be hidden behind a partial selection | Conservative default requires mappings/direct changes for every relevant path |
+| Smoke specs could hide an unmapped change | A small smoke suite could imply a valid selection | Smoke inclusion is independent of change coverage |
+| Directory matching used substrings; smoke “globs” stripped wildcards | Wrong feature matches and missed smoke specs | Root-anchored globs and literal directory boundaries |
+| A broken mapping could coexist with a valid one | Missing mapped target area silently excluded | Full-suite fallback for matching rules with no discovered targets |
+| Package config overrode the file; malformed config was ignored | Documented and actual behaviour disagreed | Validated layers, deterministic precedence, reject invalid/ambiguous config |
+| Root default captured process.cwd at import time | Wrong project in integrations | Explicit root resolution and filesystem canonicalization |
+| Git paths and logical macOS paths differed | Valid mappings became unmapped | Canonical project root at the filesystem boundary |
+| JSON missing on early exits or mixed with logs | Unreliable CI parsing | Structured outcomes, stderr diagnostics, explicit non-zero errors |
+| Verbose output referenced nonexistent import-graph/title scores | Misleading implementation claims | Report only implemented reasons |
+| Zero weight became 1 through a truthiness default | Disabled heuristics still contributed | Nullish defaults and finite numeric validation |
+| Unbounded metadata reads and swallowed I/O errors | File descriptor pressure and hidden incomplete inputs | Batches of 32, surfaced failures, outside-root checks |
+| CLI referenced registry core; lockfile expected workspace core | Local CLI could use different code; frozen installs failed | Workspace dependency, consistent lockfile, local package verification |
+| Build did not check all CLI source types | Compilation success concealed source errors | Explicit typecheck for both packages |
+| Generated fixtures committed; metadata fixture directory missing | Duplicate discovery and six pre-existing failures | Remove generated files; temporary metadata fixtures |
+| Incomplete demo workspace and broken lint scripts | Root commands were unreliable | Remove nonfunctional scaffold; executable integration fixtures |
+| Old dependencies had published advisories | Avoidable maintenance/security debt | Compatible updates, current test runner and targeted esbuild patch |
 
-2. **Mapping Logic** (`mapper/`)
-   - **Directory Heuristic**: Explicit config-based mapping only
-     - Uses `mappings` configuration to link source paths to test paths
-     - No filesystem proximity fallback
-     - Score: 1.0 for match, 0.0 otherwise
-   - **Similarity Heuristic**: File name similarity matching
-     - Token-based matching using Dice coefficient and LCS
-     - `Button.tsx` → `button.spec.ts`, `Button.spec.ts`
-   - **Tag Heuristic**: Test tag matching
-     - Matches test tags against changed file tokens
-     - Supports comment tags, inline tags, Cypress metadata
+## Boundaries and data flow
 
-3. **Smoke Tests**
-   - Explicit configuration via `smoke` config section
-   - Always included regardless of diff, safety level, or other heuristics
-   - Union operation - never filtered out
+1. **CLI/config** loads one config directory, validates every layer and resolves the project root.
+2. **CLI/Git** resolves the repo/base commit, computes merge-base, checks conflicts and reads NUL-delimited changes. Ref text is never evaluated in a shell.
+3. **Core/diff** normalizes structured changes. A malformed machine record makes the CLI fail.
+4. **Core/discovery** returns a deterministic inventory and optional metadata. It does not execute test code.
+5. **Core/mapper** consumes changes and an inventory without Git/filesystem I/O, returning a selection with reasons.
+6. **CLI/output** converts paths to portable project-relative values and reports an explicit result/exit code.
 
-4. **Safety Levels** (`safety/`)
-   - **High**: Guarantee no test silently skipped (may include extra tests)
-   - **Moderate**: Between high and medium
-   - **Medium**: Balanced selection with reasonable confidence
-   - **Low**: Aggressive filtering (may miss some tests)
+Rules are compiled once per selection. Each mapping's discovered target set is indexed once, avoiding repeated glob compilation/target matching for every change. Metadata I/O is bounded. There is no persistent cache or dependency-graph state to invalidate.
 
-5. **Discovery** (`discovery/`)
-   - Test file discovery (`cypress/e2e/**/*.spec.ts`)
-   - Metadata extraction (tags, titles, tokens)
+## Selection policy
 
-## CLI Package (`packages/cli`)
+**Conservative (default)**
 
-### Responsibilities
+Every relevant path must be directly changed spec or covered by an explicit mapping with targets. Missing coverage for one path selects the full discovered suite, even if others map successfully. Renames cover both locations.
 
-1. **Command Interface** (`cli.ts`)
-   - Parse command-line arguments
-   - Handle `--diff`, `--safety-level`, `--pattern`, `--json`, `--verbose`
-   - Exit codes: 0 (OK), 1 (errors)
+Built-in shared patterns and additional fullSuiteOnChange rules also require the full suite. Built-ins take precedence over ignoreChanges. Nothing is ignored automatically by extension.
 
-2. **Configuration** (`config/`)
-   - Load config from `cypress-smart-test-selection.config.js`
-   - Load config from `package.json` "cypress-smart-test-selection" key
-   - Merge CLI args with config file
-   - Validate configuration (fail loudly on invalid config)
+**Heuristic (opt-in)**
 
-3. **Output** (`output/`)
-   - Generate JSON output with selected test paths
-   - Human-readable console output
-   - Verbose mode with scoring breakdown
+Filename-token and tag-token overlap may add selections. Thresholds/weights apply to inferred matches. Tags do not bypass thresholds or become “100% confidence.” Both modes include explicit mappings, direct changes and configured smoke specs.
 
-## Configuration
+An unmapped change still falls back, but an incorrect heuristic match can prevent that fallback. This mode has greater omission risk.
 
-### `cypress-smart-test-selection.config.js`
+## Compatibility changes
 
-```javascript
-module.exports = {
-  // Explicit directory mappings (required for directory-based matching)
-  mappings: [
-    { src: 'src/components', test: 'cypress/e2e/components' },
-    { src: 'src/features/auth', test: 'cypress/e2e/auth' },
-    { src: ['src/utils', 'lib/utils'], test: 'cypress/e2e/utils' },
-  ],
+Treat this as a **major-release candidate**, not a patch to publish with existing version numbers.
 
-  // Smoke tests - always included regardless of diff
-  smoke: {
-    tags: ['smoke', 'critical'],
-    patterns: ['cypress/smoke/**'],
-  },
+- Conservative mode is now the default; opt into heuristic mode for the older style of selection.
+- Explicit mappings/direct changes cannot be disabled by heuristic weights.
+- Absolute spec paths require the correct projectRoot. Lower-level directory scoring expects project-relative paths.
+- No relevant changes returns no specs, even when smoke is configured.
+- Invalid thresholds/config and unreadable metadata fail rather than being clamped/ignored.
+- Git errors and changes with no specs are failures, not successful skips.
+- JSON adds outcome metadata and uses project-relative spec paths.
+- Scores/order may differ: token overlap replaces substring similarity; scores are not probabilities.
+- Config extensions: .mjs, .cjs, .js and .json. Previously advertised .ts loading did not exist.
+- Development requires Node 22.12+ and pinned pnpm. Local validation uses Node 22.17.0; other runtime/OS combinations need release testing.
 
-  // Safety level
-  safetyLevel: 'medium',
+## Verification
 
-  // Test patterns
-  testPatterns: ['cypress/e2e/**/*.spec.ts'],
+Run `pnpm test` for the package tests and `pnpm typecheck` for TypeScript validation.
 
-  // Exclusions
-  exclude: ['**/node_modules/**'],
-};
-```
+The implementation was also checked locally against real Git repositories, installed package tarballs and Cypress's TodoMVC React application in Chrome. Those temporary fixtures, runners, logs, screenshots and validation reports are kept outside this repository.
 
-## Data Flow
+Explicit mappings remain application-specific. Passing selector tests or one browser trial does not establish complete dependency coverage or a production savings percentage.
 
-```
-1. CLI receives git diff (or runs `git diff` command)
-2. Core parses diff → ChangedFile[]
-3. Core discovers all Cypress test files
-4. Core applies mapping heuristics:
-   - Directory heuristic (explicit config only)
-   - Similarity heuristic
-   - Tag heuristic
-5. Core identifies smoke tests (always included)
-6. Core applies safety level filter
-7. Core combines smoke tests + filtered tests
-8. CLI outputs selected-tests.json
-9. CLI exits with appropriate code
-```
+## Deliberate limits and next work
 
-## Key Design Decisions
-
-1. **Monorepo**: Separate concerns, enable independent versioning
-2. **TypeScript Strict**: Type safety and better DX
-3. **Vitest**: Fast, modern testing framework
-4. **Configurable Safety**: Balance between precision and safety
-5. **JSON Output**: CI-friendly, machine-readable
-6. **Explicit Mappings**: No magic filesystem proximity heuristics
-7. **Smoke Test Guarantee**: Critical tests always run
-8. **Fail Loudly**: Invalid config causes immediate failure
-
-## Removed Features
-
-The following features have been intentionally removed:
-
-- **Import Graph Heuristic**: Removed for simplicity and determinism
-- **Title-based Heuristic**: Titles are human-readable only, not used for selection
-- **Filesystem Proximity**: Directory matching requires explicit configuration
+- **No dependency graph/runtime coverage database.** Mappings must include dependent features. Collect concrete selection misses before adding graph/coverage machinery. Import parsing alone would not capture backend, runtime, data or configuration dependencies.
+- **Regex metadata is supplementary.** Common static tags are recognized; arbitrary JavaScript/dynamic tags are not evaluated. Titles are descriptive, not a selection signal.
+- **Discovery must match the actual suite.** Cypress config is not executed. Symlink directories are not followed; specs resolving outside the root are rejected.
+- **The worktree is the input.** Avoid modifying it during selection. Ignored untracked files follow Git's rules.
+- **Legacy text/unified parsing is best-effort.** The CLI uses strict NUL records. CI library consumers should do the same and reject parser warnings.
+- **No savings claim yet.** Compare selected runs with full runs on representative applications, measuring selection size, wall time and missed failures.
+- **Before release:** assign compatible new versions to both packages and verify the supported Node/OS/browser combinations beyond the local consumer trial. Publishing requires a separate release.

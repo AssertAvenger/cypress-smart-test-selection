@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { loadConfig } from "../src/config/loadConfig.js";
-import { writeFile, mkdir, rm } from "node:fs/promises";
+import { writeFile, mkdtemp, rm, realpath } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -8,8 +8,7 @@ describe("loadConfig", () => {
   let testDir: string;
 
   beforeEach(async () => {
-    testDir = join(tmpdir(), `cli-test-${Date.now()}`);
-    await mkdir(testDir, { recursive: true });
+    testDir = await mkdtemp(join(tmpdir(), "cli-test-"));
   });
 
   afterEach(async () => {
@@ -20,7 +19,8 @@ describe("loadConfig", () => {
     const config = await loadConfig(testDir);
 
     expect(config.safetyLevel).toBe("medium");
-    expect(config.defaultBase).toBe("origin/main");
+    expect(config.defaultBase).toBeUndefined();
+    expect(config.projectRoot).toBe(await realpath(testDir));
     expect(config.testPatterns).toEqual([]);
     expect(config.exclude).toEqual([]);
   });
@@ -72,13 +72,11 @@ describe("loadConfig", () => {
       projectRoot: ".",
     });
 
-    expect(config.projectRoot).toBe(resolve("."));
+    expect(config.projectRoot).toBe(await realpath(testDir));
   });
 
-  it("should handle malformed package.json gracefully", async () => {
+  it("should reject malformed package.json", async () => {
     await writeFile(join(testDir, "package.json"), "{ invalid json }");
-    const config = await loadConfig(testDir);
-
-    expect(config.safetyLevel).toBe("medium");
+    await expect(loadConfig(testDir)).rejects.toThrow();
   });
 });

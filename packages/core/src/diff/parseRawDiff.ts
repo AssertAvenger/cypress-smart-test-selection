@@ -150,6 +150,7 @@ function parseUnifiedDiff(diffOutput: string): RawDiffEntry[] {
   let currentOldPath: string | undefined;
   let currentNewPath: string | undefined;
   let hasChanges = false;
+  let inHunk = false;
 
   // Helper to finalize and save current entry
   const finalizeEntry = () => {
@@ -185,6 +186,7 @@ function parseUnifiedDiff(diffOutput: string): RawDiffEntry[] {
     currentOldPath = undefined;
     currentNewPath = undefined;
     hasChanges = false;
+    inHunk = false;
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -205,6 +207,10 @@ function parseUnifiedDiff(diffOutput: string): RawDiffEntry[] {
       }
       continue;
     }
+
+    // Content inside a hunk may resemble file headers; never parse it as metadata.
+    if (HUNK_HEADER_REGEX.test(line)) { inHunk = true; continue; }
+    if (inHunk) continue;
 
     // Check for file header (--- or +++)
     const headerMatch = line.match(UNIFIED_DIFF_HEADER_REGEX);
@@ -230,11 +236,6 @@ function parseUnifiedDiff(diffOutput: string): RawDiffEntry[] {
         }
         hasChanges = true;
       }
-      continue;
-    }
-
-    // Check for hunk header
-    if (HUNK_HEADER_REGEX.test(line)) {
       continue;
     }
 
@@ -310,6 +311,28 @@ export function parseRawDiff(
 ): RawDiffEntry[] {
   if (!diffOutput || !diffOutput.trim()) {
     return [];
+  }
+
+  if (options.format === "name-status-z" || diffOutput.includes("\0")) {
+    const fields = diffOutput.split("\0");
+    if (fields.pop() !== "") throw new Error("Truncated NUL-delimited Git diff");
+    const entries: RawDiffEntry[] = [];
+    for (let i = 0; i < fields.length;) {
+      const status = fields[i++];
+      if (!/^(?:[AMDT]|[RC]\d{1,3})$/.test(status)) {
+        throw new Error("Unsupported Git status: " + status);
+      }
+      const first = fields[i++];
+      const second = /^[RC]/.test(status) ? fields[i++] : undefined;
+      if (!first || (/^[RC]/.test(status) && !second)) throw new Error("Missing Git path");
+      entries.push({
+        statusCode: status[0],
+        newPath: second ?? first,
+        oldPath: second || status === "D" ? first : undefined,
+        similarity: status.length > 1 ? Number(status.slice(1)) : undefined,
+      });
+    }
+    return entries;
   }
 
   // Auto-detect format and parse

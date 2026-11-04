@@ -1,4 +1,6 @@
 packages:
-  - 'packages/*'
-  - 'examples/*'
+  - "packages/*"
 
+# Security patch for the CLI bundler's transitive dependency.
+overrides:
+  'esbuild@<0.28.1': '0.28.1'

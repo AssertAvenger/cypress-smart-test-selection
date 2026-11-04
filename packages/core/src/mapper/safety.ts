@@ -11,8 +11,12 @@ export function getThreshold(
   safetyLevel: SafetyLevel,
   customThreshold?: number
 ): number {
+  if (!(Object.hasOwn(SAFETY_THRESHOLDS, safetyLevel))) throw new Error("Invalid safety level");
   if (customThreshold !== undefined) {
-    return Math.max(0.0, Math.min(1.0, customThreshold));
+    if (!Number.isFinite(customThreshold) || customThreshold < 0 || customThreshold > 1) {
+      throw new Error("Threshold must be a finite number between 0 and 1");
+    }
+    return customThreshold;
   }
   return SAFETY_THRESHOLDS[safetyLevel];
 }

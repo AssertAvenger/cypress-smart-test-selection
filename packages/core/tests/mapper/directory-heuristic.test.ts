@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { resolve } from "node:path";
 import { calculateDirectoryScore } from "../../src/mapper/directory-heuristic.js";
 import type { ChangedFile } from "../../src/diff/types.js";
 import type { DirectoryMapping } from "../../src/mapper/types.js";
@@ -11,7 +10,7 @@ describe("directory-heuristic", () => {
         newPath: "src/components/Button.tsx",
         status: "modified",
       };
-      const testPath = resolve("/project", "cypress/e2e/components/button.spec.ts");
+      const testPath = "cypress/e2e/components/button.spec.ts";
       const mappings: DirectoryMapping[] = [
         { src: "src/components", test: "cypress/e2e/components" },
       ];
@@ -26,7 +25,7 @@ describe("directory-heuristic", () => {
         newPath: "src/components/Button.tsx",
         status: "modified",
       };
-      const testPath = resolve("/project", "cypress/e2e/components/button.spec.ts");
+      const testPath = "cypress/e2e/components/button.spec.ts";
 
       const score = calculateDirectoryScore(changedFile, testPath, undefined);
 
@@ -38,7 +37,7 @@ describe("directory-heuristic", () => {
         newPath: "src/components/Button.tsx",
         status: "modified",
       };
-      const testPath = resolve("/project", "cypress/e2e/components/button.spec.ts");
+      const testPath = "cypress/e2e/components/button.spec.ts";
 
       const score = calculateDirectoryScore(changedFile, testPath, []);
 
@@ -50,7 +49,7 @@ describe("directory-heuristic", () => {
         newPath: "src/components/Button.tsx",
         status: "modified",
       };
-      const testPath = resolve("/project", "cypress/e2e/features/auth.spec.ts");
+      const testPath = "cypress/e2e/features/auth.spec.ts";
       const mappings: DirectoryMapping[] = [
         { src: "src/components", test: "cypress/e2e/components" },
       ];
@@ -65,7 +64,7 @@ describe("directory-heuristic", () => {
         newPath: "src/features/auth/Login.tsx",
         status: "modified",
       };
-      const testPath = resolve("/project", "cypress/e2e/components/button.spec.ts");
+      const testPath = "cypress/e2e/components/button.spec.ts";
       const mappings: DirectoryMapping[] = [
         { src: "src/components", test: "cypress/e2e/components" },
       ];
@@ -80,7 +79,7 @@ describe("directory-heuristic", () => {
         newPath: "src/features/auth/LoginForm.tsx",
         status: "modified",
       };
-      const testPath = resolve("/project", "cypress/e2e/auth/login-form.spec.ts");
+      const testPath = "cypress/e2e/auth/login-form.spec.ts";
       const mappings: DirectoryMapping[] = [
         { src: "src/components", test: "cypress/e2e/components" },
         { src: "src/features/auth", test: "cypress/e2e/auth" },
@@ -96,7 +95,7 @@ describe("directory-heuristic", () => {
         newPath: "lib/utils/helpers.ts",
         status: "modified",
       };
-      const testPath = resolve("/project", "cypress/e2e/utils/helpers.spec.ts");
+      const testPath = "cypress/e2e/utils/helpers.spec.ts";
       const mappings: DirectoryMapping[] = [
         { src: ["src/utils", "lib/utils"], test: "cypress/e2e/utils" },
       ];
@@ -111,7 +110,7 @@ describe("directory-heuristic", () => {
         newPath: "src/components/Button.tsx",
         status: "modified",
       };
-      const testPath = resolve("/project", "cypress/integration/components/button.spec.ts");
+      const testPath = "cypress/integration/components/button.spec.ts";
       const mappings: DirectoryMapping[] = [
         { src: "src/components", test: ["cypress/e2e/components", "cypress/integration/components"] },
       ];
@@ -126,7 +125,7 @@ describe("directory-heuristic", () => {
         newPath: "lib/shared/utils.ts",
         status: "modified",
       };
-      const testPath = resolve("/project", "tests/e2e/shared/utils.spec.ts");
+      const testPath = "tests/e2e/shared/utils.spec.ts";
       const mappings: DirectoryMapping[] = [
         { 
           src: ["src/shared", "lib/shared"], 
@@ -144,7 +143,7 @@ describe("directory-heuristic", () => {
         newPath: "src/features/auth/components/LoginButton.tsx",
         status: "modified",
       };
-      const testPath = resolve("/project", "cypress/e2e/features/auth/components/login-button.spec.ts");
+      const testPath = "cypress/e2e/features/auth/components/login-button.spec.ts";
       const mappings: DirectoryMapping[] = [
         { src: "src/features", test: "cypress/e2e/features" },
       ];
@@ -160,7 +159,7 @@ describe("directory-heuristic", () => {
         newPath: "src/components/NewButton.tsx",
         status: "renamed",
       };
-      const testPath = resolve("/project", "cypress/e2e/components/new-button.spec.ts");
+      const testPath = "cypress/e2e/components/new-button.spec.ts";
       const mappings: DirectoryMapping[] = [
         { src: "src/components", test: "cypress/e2e/components" },
       ];
@@ -175,7 +174,7 @@ describe("directory-heuristic", () => {
         newPath: "",
         status: "modified",
       };
-      const testPath = resolve("/project", "cypress/e2e/test.spec.ts");
+      const testPath = "cypress/e2e/test.spec.ts";
       const mappings: DirectoryMapping[] = [
         { src: "src", test: "cypress/e2e" },
       ];
@@ -192,7 +191,7 @@ describe("directory-heuristic", () => {
         newPath: "src/components/Button.tsx",
         status: "modified",
       };
-      const testPath = resolve("/project", "cypress/e2e/components/button.spec.ts");
+      const testPath = "cypress/e2e/components/button.spec.ts";
       
       // No mappings - should return 0 even though paths are similar
       const score = calculateDirectoryScore(changedFile, testPath, []);

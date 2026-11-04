@@ -29,9 +29,9 @@ describe("safety", () => {
       expect(threshold).toBe(0.5);
     });
 
-    it("should clamp custom threshold to [0, 1]", () => {
-      expect(getThreshold("high", -0.5)).toBe(0.0);
-      expect(getThreshold("high", 1.5)).toBe(1.0);
+    it("should reject invalid thresholds", () => {
+      expect(() => getThreshold("high", -0.5)).toThrow();
+      expect(() => getThreshold("high", 1.5)).toThrow();
     });
   });
 

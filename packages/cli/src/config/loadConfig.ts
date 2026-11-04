@@ -1,160 +1,94 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat, realpath } from "node:fs/promises";
 import { resolve, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { CliConfig, MergedConfig } from "../types.js";
 
-/**
- * Default configuration
- */
-const DEFAULT_CONFIG: MergedConfig = {
-  projectRoot: process.cwd(),
-  testPatterns: [],
-  exclude: [],
-  safetyLevel: "medium",
-  defaultBase: "origin/main",
-};
-
-/**
- * Validate configuration structure
- */
-function validateConfig(config: unknown, source: string): void {
-  if (config === null || typeof config !== "object") {
-    throw new Error(`Invalid config from ${source}: expected an object`);
+function object(value: unknown, name: string): asserts value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(name + " must be an object");
+}
+function strings(value: unknown, name: string, allowEmpty = true): void {
+  if (!Array.isArray(value) || (!allowEmpty && !value.length) ||
+      value.some((v) => typeof v !== "string" || !v.trim())) {
+    throw new Error(name + " must be an array of non-empty strings");
   }
-
-  const cfg = config as Record<string, unknown>;
-
-  if (cfg.mappings !== undefined) {
-    if (!Array.isArray(cfg.mappings)) {
-      throw new Error(`Invalid config from ${source}: 'mappings' must be an array`);
+}
+function validate(value: unknown): asserts value is CliConfig {
+  object(value, "Config");
+  const allowed = new Set(["projectRoot", "testPatterns", "exclude", "safetyLevel", "threshold",
+    "defaultBase", "mappings", "smoke", "mode", "fullSuiteOnChange", "ignoreChanges"]);
+  for (const key of Object.keys(value)) if (!allowed.has(key)) throw new Error("Unknown config option: " + key);
+  for (const key of ["projectRoot", "defaultBase"]) {
+    if (value[key] !== undefined && (typeof value[key] !== "string" || !value[key].trim())) {
+      throw new Error(key + " must be a non-empty string");
     }
-    for (let i = 0; i < cfg.mappings.length; i++) {
-      const mapping = cfg.mappings[i] as Record<string, unknown>;
-      if (!mapping || typeof mapping !== "object") {
-        throw new Error(`Invalid config from ${source}: mappings[${i}] must be an object`);
-      }
-      if (mapping.src === undefined) {
-        throw new Error(`Invalid config from ${source}: mappings[${i}].src is required`);
-      }
-      if (mapping.test === undefined) {
-        throw new Error(`Invalid config from ${source}: mappings[${i}].test is required`);
-      }
-      if (typeof mapping.src !== "string" && !Array.isArray(mapping.src)) {
-        throw new Error(`Invalid config from ${source}: mappings[${i}].src must be a string or array of strings`);
-      }
-      if (Array.isArray(mapping.src) && !mapping.src.every((s) => typeof s === "string")) {
-        throw new Error(`Invalid config from ${source}: mappings[${i}].src must be a string or array of strings`);
-      }
-      if (typeof mapping.test !== "string" && !Array.isArray(mapping.test)) {
-        throw new Error(`Invalid config from ${source}: mappings[${i}].test must be a string or array of strings`);
-      }
-      if (Array.isArray(mapping.test) && !mapping.test.every((s) => typeof s === "string")) {
-        throw new Error(`Invalid config from ${source}: mappings[${i}].test must be a string or array of strings`);
+  }
+  for (const key of ["testPatterns", "exclude", "fullSuiteOnChange", "ignoreChanges"]) {
+    if (value[key] !== undefined) strings(value[key], key);
+  }
+  if (value.mode !== undefined && (typeof value.mode !== "string" || !["conservative", "heuristic"].includes(value.mode))) throw new Error("Invalid mode");
+  if (value.safetyLevel !== undefined && (typeof value.safetyLevel !== "string" || !["high", "moderate", "medium", "low"].includes(value.safetyLevel))) {
+    throw new Error("Invalid safetyLevel");
+  }
+  if (value.threshold !== undefined && (typeof value.threshold !== "number" ||
+      !Number.isFinite(value.threshold) || value.threshold < 0 || value.threshold > 1)) {
+    throw new Error("threshold must be a finite number between 0 and 1");
+  }
+  if (value.mappings !== undefined) {
+    if (!Array.isArray(value.mappings)) throw new Error("mappings must be an array");
+    for (const mapping of value.mappings) {
+      object(mapping, "Mapping");
+      if (Object.keys(mapping).some((k) => k !== "src" && k !== "test")) throw new Error("Unknown mapping option");
+      for (const key of ["src", "test"]) {
+        strings(typeof mapping[key] === "string" ? [mapping[key]] : mapping[key], "mapping." + key, false);
       }
     }
   }
-
-  if (cfg.smoke !== undefined) {
-    if (cfg.smoke === null || typeof cfg.smoke !== "object") {
-      throw new Error(`Invalid config from ${source}: 'smoke' must be an object`);
-    }
-    const smoke = cfg.smoke as Record<string, unknown>;
-    if (smoke.patterns !== undefined) {
-      if (!Array.isArray(smoke.patterns)) {
-        throw new Error(`Invalid config from ${source}: smoke.patterns must be an array`);
-      }
-      if (!smoke.patterns.every((p) => typeof p === "string")) {
-        throw new Error(`Invalid config from ${source}: smoke.patterns must be an array of strings`);
-      }
-    }
-    if (smoke.tags !== undefined) {
-      if (!Array.isArray(smoke.tags)) {
-        throw new Error(`Invalid config from ${source}: smoke.tags must be an array`);
-      }
-      if (!smoke.tags.every((t) => typeof t === "string")) {
-        throw new Error(`Invalid config from ${source}: smoke.tags must be an array of strings`);
-      }
-    }
-  }
-
-  if (cfg.safetyLevel !== undefined) {
-    const validLevels = ["high", "moderate", "medium", "low"];
-    if (!validLevels.includes(cfg.safetyLevel as string)) {
-      throw new Error(`Invalid config from ${source}: safetyLevel must be one of: ${validLevels.join(", ")}`);
-    }
-  }
-
-  if (cfg.threshold !== undefined) {
-    if (typeof cfg.threshold !== "number" || cfg.threshold < 0 || cfg.threshold > 1) {
-      throw new Error(`Invalid config from ${source}: threshold must be a number between 0 and 1`);
+  if (value.smoke !== undefined) {
+    object(value.smoke, "smoke");
+    for (const [key, val] of Object.entries(value.smoke)) {
+      if (key !== "patterns" && key !== "tags") throw new Error("Unknown smoke option: " + key);
+      strings(val, "smoke." + key);
     }
   }
 }
 
-/**
- * Load configuration from cypress-test-selector.config.js
- */
-async function loadConfigFile(projectRoot: string): Promise<CliConfig | null> {
-  const jsConfigPath = join(projectRoot, "cypress-test-selector.config.js");
-  try {
-    const config = await import(jsConfigPath);
-    const loadedConfig = config.default || config;
-    validateConfig(loadedConfig, jsConfigPath);
-    return loadedConfig;
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith("Invalid config")) {
-      throw error;
-    }
-    return null;
+async function exists(path: string): Promise<boolean> {
+  try { await stat(path); return true; } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
   }
 }
 
-/**
- * Load configuration from package.json
- */
-async function loadPackageJsonConfig(
-  projectRoot: string
-): Promise<CliConfig | null> {
-  const packageJsonPath = join(projectRoot, "package.json");
-  try {
-    const content = await readFile(packageJsonPath, "utf-8");
-    const packageJson = JSON.parse(content);
-    const config = packageJson["cypress-test-selector"];
-    if (config) {
-      validateConfig(config, `${packageJsonPath} ["cypress-test-selector"]`);
+export async function loadConfig(directory = process.cwd(), overrides: CliConfig = {}): Promise<MergedConfig> {
+  const configRoot = resolve(directory);
+  const layers: CliConfig[] = [];
+  const packagePath = join(configRoot, "package.json");
+  if (await exists(packagePath)) {
+    const pkg = JSON.parse(await readFile(packagePath, "utf8"));
+    if (pkg["cypress-test-selector"] !== undefined) {
+      validate(pkg["cypress-test-selector"]);
+      layers.push(pkg["cypress-test-selector"]);
     }
-    return config || null;
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith("Invalid config")) {
-      throw error;
-    }
-    return null;
   }
-}
-
-/**
- * Load and merge configuration from all sources
- */
-export async function loadConfig(
-  projectRoot: string = process.cwd(),
-  cliOverrides: Partial<CliConfig> = {}
-): Promise<MergedConfig> {
-  const config: MergedConfig = { ...DEFAULT_CONFIG };
-
-  const configFile = await loadConfigFile(projectRoot);
-  if (configFile) {
-    Object.assign(config, configFile);
+  const candidates = ["js", "mjs", "cjs", "json", "ts"].map((ext) =>
+    join(configRoot, "cypress-test-selector.config." + ext));
+  const present: string[] = [];
+  for (const file of candidates) if (await exists(file)) present.push(file);
+  if (present.length > 1) throw new Error("Multiple selector config files found; keep exactly one.");
+  if (present.length) {
+    const file = present[0];
+    if (file.endsWith(".ts")) throw new Error("TypeScript config is not supported. Use .mjs, .cjs, .js or .json.");
+    const config = file.endsWith(".json")
+      ? JSON.parse(await readFile(file, "utf8"))
+      : (await import(pathToFileURL(file).href)).default;
+    validate(config);
+    layers.push(config);
   }
-
-  const packageJsonConfig = await loadPackageJsonConfig(projectRoot);
-  if (packageJsonConfig) {
-    Object.assign(config, packageJsonConfig);
-  }
-
-  Object.assign(config, cliOverrides);
-
-  if (config.projectRoot) {
-    config.projectRoot = resolve(config.projectRoot);
-  }
-
-  return config;
+  validate(overrides);
+  const merged = Object.assign({
+    projectRoot: configRoot, testPatterns: [], exclude: [], safetyLevel: "medium", mode: "conservative",
+  }, ...layers, overrides) as MergedConfig;
+  merged.projectRoot = await realpath(resolve(configRoot, merged.projectRoot));
+  if (!(await stat(merged.projectRoot)).isDirectory()) throw new Error("projectRoot must be a directory");
+  return merged;
 }

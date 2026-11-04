@@ -17,8 +17,8 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint src --ext .ts",
-    "clean": "rm -rf dist"
+    "clean": "node -e \"require('node:fs').rmSync('dist', {recursive:true, force:true})\"",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "cypress",
@@ -40,13 +40,13 @@
     "url": "https://github.com/AssertAvenger/cypress-smart-test-selection/issues"
   },
   "dependencies": {
-    "cypress-smart-test-selection-core": "^2.0.0"
+    "cypress-smart-test-selection-core": "workspace:^"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "typescript": "^5.0.0",
-    "tsup": "^8.0.0",
-    "vitest": "^1.0.0"
+    "@types/node": "^22.0.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
   },
   "engines": {
     "node": ">=18.0.0"

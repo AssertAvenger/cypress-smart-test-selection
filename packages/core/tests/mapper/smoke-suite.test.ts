@@ -34,7 +34,7 @@ describe("Smoke suite always included (explicit config)", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic",
       safetyLevel: "high",
       config: {
         smoke: {
@@ -75,7 +75,7 @@ describe("Smoke suite always included (explicit config)", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic",
       safetyLevel: "medium",
       config: {
         smoke: {
@@ -118,7 +118,7 @@ describe("Smoke suite always included (explicit config)", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic",
       safetyLevel: "low",
       config: {
         smoke: {
@@ -133,7 +133,7 @@ describe("Smoke suite always included (explicit config)", () => {
     );
   });
 
-  it("should include smoke tests even with empty diff", async () => {
+  it("should report no changes even when smoke tests are configured", async () => {
     const diff: ChangedFile[] = []; // Empty diff
 
     const tests: DiscoveredTestFile[] = [
@@ -157,7 +157,7 @@ describe("Smoke suite always included (explicit config)", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic",
       safetyLevel: "high",
       config: {
         smoke: {
@@ -168,17 +168,8 @@ describe("Smoke suite always included (explicit config)", () => {
     });
 
     // With empty diff, no regular tests should be selected
-    expect(result.selected).not.toContain(
-      resolve("/project", "cypress/e2e/components/button.spec.ts")
-    );
-
-    // But smoke tests should ALWAYS be included
-    expect(result.selected).toContain(
-      resolve("/project", "cypress/e2e/smoke/smoke.spec.ts")
-    );
-    expect(result.selected).toContain(
-      resolve("/project", "cypress/smoke/health-check.spec.ts")
-    );
+    expect(result.status).toBe("no-changes");
+    expect(result.selected).toEqual([]);
   });
 
   it("should not duplicate smoke tests if already selected", async () => {
@@ -204,7 +195,7 @@ describe("Smoke suite always included (explicit config)", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic",
       safetyLevel: "high",
       config: {
         smoke: {
@@ -243,7 +234,7 @@ describe("Smoke suite always included (explicit config)", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic",
       safetyLevel: "high",
       config: {
         smoke: {
@@ -287,7 +278,7 @@ describe("Smoke suite always included (explicit config)", () => {
     ];
 
     // No smoke config provided
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic",
       safetyLevel: "low",
     });
 
@@ -327,7 +318,7 @@ describe("Smoke suite always included (explicit config)", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic",
       safetyLevel: "low",
       config: {
         smoke: {

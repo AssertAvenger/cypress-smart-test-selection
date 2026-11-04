@@ -1,10 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { extractTestMetadata, tokenizeText } from "../../src/discovery/metadata.js";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { writeFile, unlink } from "node:fs/promises";
+import { writeFile, unlink, mkdtemp, rm } from "node:fs/promises";
 
 describe("metadata extraction", () => {
-  const testDir = resolve(__dirname, "../fixtures/metadata");
+  let testDir: string;
+  beforeAll(async () => { testDir = await mkdtemp(resolve(tmpdir(), "selector-metadata-")); });
+  afterAll(async () => { await rm(testDir, { recursive: true, force: true }); });
 
   describe("extractTestMetadata", () => {
     it("should extract comment tags", async () => {
@@ -114,12 +117,8 @@ describe("[AUTH] Login", () => {});`;
       await unlink(testFile).catch(() => {});
     });
 
-    it("should handle missing files gracefully", async () => {
-      const metadata = await extractTestMetadata("/nonexistent/file.spec.ts");
-
-      expect(metadata.tags).toEqual([]);
-      expect(metadata.titles).toEqual([]);
-      expect(metadata.tokens).toEqual([]);
+    it("should report unreadable specs", async () => {
+      await expect(extractTestMetadata("/nonexistent/file.spec.ts")).rejects.toThrow("Cannot read spec");
     });
   });
 

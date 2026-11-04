@@ -1,99 +1,53 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { Logger } from "../output/logger.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
-/**
- * Auto-detect the base branch/commit for diff
- * Tries: origin/main, origin/master, main, master
- */
-async function detectBaseBranch(): Promise<string> {
-  const candidates = ["origin/main", "origin/master", "main", "master"];
-
-  for (const candidate of candidates) {
-    try {
-      await execAsync(`git rev-parse --verify ${candidate}`, {
-        stdio: "pipe",
-      });
-      return candidate;
-    } catch {
-      // Try next candidate
-      continue;
-    }
-  }
-
-  // Fallback to HEAD~1 if no branch found
-  return "HEAD~1";
-}
-
-/**
- * Get raw git diff output
- *
- * @param base - Base reference (branch, commit, etc.)
- * @param logger - Logger instance
- * @returns Raw git diff output
- */
-export async function getGitDiff(
-  base: string | undefined,
-  logger: Logger
-): Promise<string> {
-  // Auto-detect base if not provided
-  const baseRef = base || (await detectBaseBranch());
-
-  logger.debug(`Using git base: ${baseRef}`);
-
+async function git(cwd: string, args: string[]): Promise<string> {
   try {
-    // Get diff with --name-status format for better parsing
-    // Use ... for range (merge base) or .. for direct comparison
-    // Also include uncommitted changes with HEAD
-    const { stdout: committedDiff } = await execAsync(
-      `git diff --name-status ${baseRef}...HEAD`,
-      {
-        encoding: "utf-8",
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-      }
-    ).catch(() => ({ stdout: "", stderr: "" }));
-    
-    // Also get uncommitted changes
-    const { stdout: uncommittedDiff, stderr } = await execAsync(
-      `git diff --name-status HEAD`,
-      {
-        encoding: "utf-8",
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-      }
-    ).catch(() => ({ stdout: "", stderr: "" }));
-    
-    // Combine both diffs, deduplicate
-    const combined = (committedDiff || "") + (uncommittedDiff || "");
-    const stdout = combined;
-
-    if (stderr) {
-      logger.warn(`Git diff stderr: ${stderr}`);
-    }
-
-    if (!stdout || !stdout.trim()) {
-      logger.info("No changes detected in git diff.");
-      return "";
-    }
-
+    const { stdout } = await execFileAsync("git", args, {
+      cwd, encoding: "utf8", maxBuffer: 32 * 1024 * 1024, timeout: 30_000,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    });
     return stdout;
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error";
-    throw new Error(`Failed to get git diff: ${errorMessage}`);
+    const detail = error as Error & { stderr?: string };
+    throw new Error("Git command failed: " + (detail.stderr?.trim() || detail.message), { cause: error });
   }
 }
 
-/**
- * Check if we're in a git repository
- */
-export async function isGitRepository(): Promise<boolean> {
+async function resolveCommit(cwd: string, ref: string): Promise<string> {
+  return (await git(cwd, ["rev-parse", "--verify", "--end-of-options", ref + "^{commit}"])).trim();
+}
+
+export async function detectBaseBranch(cwd: string): Promise<string> {
+  for (const ref of ["origin/HEAD", "origin/main", "origin/master", "main", "master"]) {
+    try { await resolveCommit(cwd, ref); return ref; } catch { /* Try the next known default branch. */ }
+  }
+  throw new Error("Cannot detect a base branch. Pass --base <ref> and fetch that ref first.");
+}
+
+/** Net changes from merge-base to the current worktree, including untracked files. */
+export async function getGitDiff(base: string | undefined, logger: Logger, cwd: string) {
+  const repoRoot = (await git(cwd, ["rev-parse", "--show-toplevel"])).replace(/\r?\n$/, "");
+  const baseRef = base ?? await detectBaseBranch(repoRoot);
+  const baseCommit = await resolveCommit(repoRoot, baseRef);
+  let mergeBase: string;
   try {
-    await execAsync("git rev-parse --git-dir", { stdio: "pipe" });
-    return true;
-  } catch {
-    return false;
+    mergeBase = (await git(repoRoot, ["merge-base", baseCommit, "HEAD"])).trim();
+  } catch (error) {
+    throw new Error("Cannot find a merge base with " + baseRef +
+      ". Fetch sufficient Git history (including the target branch) before selecting tests.", { cause: error });
   }
+  if (await git(repoRoot, ["ls-files", "--unmerged", "-z"])) {
+    throw new Error("Resolve merge conflicts before selecting tests.");
+  }
+  logger.debug("Comparing worktree with merge-base " + mergeBase + " (" + baseRef + ")");
+  const [tracked, untracked] = await Promise.all([
+    git(repoRoot, ["diff", "--name-status", "-z", "--no-ext-diff", "--no-textconv", "--find-renames", mergeBase, "--"]),
+    git(repoRoot, ["ls-files", "--others", "--exclude-standard", "-z"]),
+  ]);
+  const additions = untracked.split("\0").filter(Boolean).map((path) => "A\0" + path + "\0").join("");
+  return { rawDiff: tracked + additions, repoRoot, baseRef };
 }
-

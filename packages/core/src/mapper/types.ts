@@ -8,15 +8,15 @@ export type SafetyLevel = "high" | "moderate" | "medium" | "low";
  * Links source paths to test paths for explicit mapping
  */
 export interface DirectoryMapping {
-  /** Source path patterns (e.g., "src/components", "src/features/auth") */
+  /** Project-relative source files, directories or globs (e.g., "src/components", "src/features/auth") */
   src: string | string[];
-  /** Test path patterns (e.g., "cypress/e2e/components", "cypress/e2e/auth") */
+  /** Project-relative spec files, directories or globs (e.g., "cypress/e2e/components", "cypress/e2e/auth") */
   test: string | string[];
 }
 
 /**
  * Smoke test configuration
- * Defines tests that should always be included regardless of diff
+ * Defines specs to include whenever there are relevant changes
  */
 export interface SmokeConfig {
   /** Glob patterns for smoke test files (e.g., "cypress/e2e/smoke/") */
@@ -33,6 +33,10 @@ export interface MappingConfig {
   mappings?: DirectoryMapping[];
   /** Smoke test configuration - always included */
   smoke?: SmokeConfig;
+  /** Additional shared files/directories/globs that require the full suite. */
+  fullSuiteOnChange?: string[];
+  /** Explicitly ignore non-runtime paths. Empty by default. */
+  ignoreChanges?: string[];
 }
 
 /**
@@ -40,7 +44,7 @@ export interface MappingConfig {
  * Scores range from 0.0 to 1.0
  */
 export interface TestMapping {
-  /** Absolute path to the test file */
+  /** Test path as supplied to mapDiffToTests */
   testPath: string;
   /** Combined score from all heuristics (0.0 to 1.0) */
   score: number;
@@ -58,6 +62,11 @@ export interface TestMapping {
  * Result of mapping changed files to test files
  */
 export interface MappingResult {
+  status: "no-changes" | "selected" | "full-suite" | "no-tests";
+  mode: "conservative" | "heuristic";
+  totalTests: number;
+  fallbackReasons: string[];
+  unmappedFiles: string[];
   /** Array of test mappings with scores */
   mappings: TestMapping[];
   /** Selected test paths based on safety level */
@@ -72,13 +81,17 @@ export interface MappingResult {
  * Options for mapping changed files to tests
  */
 export interface MappingOptions {
+  /** Root for source paths, spec paths and all configuration patterns. */
+  projectRoot?: string;
+  /** Conservative requires explicit coverage for every changed path. */
+  mode?: "conservative" | "heuristic";
   /** Safety level for test selection */
   safetyLevel?: SafetyLevel;
   /** Custom threshold (overrides safety level if provided) */
   threshold?: number;
-  /** Whether to include individual heuristic scores */
+  /** @deprecated Scores are always included. */
   includeScores?: boolean;
-  /** Custom directory mapping weight (default: DEFAULT_WEIGHTS.directoryWeight) */
+  /** @deprecated Explicit mappings are mandatory and are not weighted. */
   directoryWeight?: number;
   /** Custom similarity weight (default: DEFAULT_WEIGHTS.similarityWeight) */
   similarityWeight?: number;
@@ -92,7 +105,7 @@ export interface MappingOptions {
  * Safety level thresholds
  */
 export const SAFETY_THRESHOLDS: Record<SafetyLevel, number> = {
-  high: 0.0, // Select all tests with any score > 0
+  high: 0.0, // Heuristic mode: any positive score
   moderate: 0.2, // Select tests with score >= 0.2 (between high and medium)
   medium: 0.4, // Select tests with score >= 0.4
   low: 0.7, // Select only tests with score >= 0.7

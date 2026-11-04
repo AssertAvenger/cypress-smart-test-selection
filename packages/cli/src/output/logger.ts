@@ -25,7 +25,7 @@ export class Logger {
    */
   info(message: string): void {
     if (this.level !== "silent") {
-      console.log(message);
+      console.error(message);
     }
   }
 
@@ -53,7 +53,7 @@ export class Logger {
    */
   debug(message: string, ...args: unknown[]): void {
     if (this.level === "verbose" || this.level === "debug") {
-      console.log(`🔍 ${message}`, ...args);
+      console.error(`🔍 ${message}`, ...args);
     }
   }
 
@@ -62,7 +62,7 @@ export class Logger {
    */
   verbose(message: string): void {
     if (this.level === "verbose" || this.level === "debug") {
-      console.log(`ℹ️  ${message}`);
+      console.error(`ℹ️  ${message}`);
     }
   }
 
@@ -71,7 +71,7 @@ export class Logger {
    */
   success(message: string): void {
     if (this.level !== "silent") {
-      console.log(`✅ ${message}`);
+      console.error(`✅ ${message}`);
     }
   }
 }

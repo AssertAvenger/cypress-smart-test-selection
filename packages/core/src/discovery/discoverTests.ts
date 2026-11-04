@@ -1,87 +1,37 @@
 import fg from "fast-glob";
-import { resolve } from "node:path";
+import { realpath, stat } from "node:fs/promises";
+import { relative, resolve } from "node:path";
 import type { DiscoverOptions, DiscoveredTestFile } from "./types.js";
-import {
-  DEFAULT_TEST_PATTERNS,
-  DEFAULT_EXCLUDE_PATTERNS,
-  normalizePatterns,
-} from "./patterns.js";
+import { DEFAULT_TEST_PATTERNS, DEFAULT_EXCLUDE_PATTERNS } from "./patterns.js";
 import { extractTestMetadata } from "./metadata.js";
+import { compilePathPattern, toPosix } from "../paths.js";
 
-/**
- * Normalize a path to POSIX style (forward slashes)
- * @param path - Path to normalize
- * @returns POSIX-style path
- */
-function toPosixPath(path: string): string {
-  return path.replace(/\\/g, "/");
-}
+export function discoverTests(options: DiscoverOptions & { extractMetadata: false }): Promise<string[]>;
+export function discoverTests(options: DiscoverOptions & { extractMetadata?: true }): Promise<DiscoveredTestFile[]>;
+export function discoverTests(options: DiscoverOptions): Promise<string[] | DiscoveredTestFile[]>;
+export async function discoverTests(options: DiscoverOptions): Promise<string[] | DiscoveredTestFile[]> {
+  const { projectRoot, testPatterns, exclude = [], extractMetadata = true } = options;
+  const root = resolve(projectRoot);
+  if (!(await stat(root)).isDirectory()) throw new Error("projectRoot must be a directory");
+  const realRoot = await realpath(root);
+  const patterns = [...testPatterns ?? DEFAULT_TEST_PATTERNS];
+  const ignore = [...DEFAULT_EXCLUDE_PATTERNS, ...exclude];
+  for (const pattern of [...patterns, ...ignore]) compilePathPattern(pattern);
+  const files = [...new Set(await fg(patterns, {
+    cwd: root, absolute: true, ignore, onlyFiles: true, unique: true,
+    caseSensitiveMatch: true, followSymbolicLinks: false,
+  }))].map(toPosix).sort();
 
-/**
- * Discover Cypress test files in the project
- *
- * @param options - Discovery options
- * @returns Promise resolving to array of absolute test file paths, or DiscoveredTestFile[] if extractMetadata is true
- */
-export async function discoverTests(
-  options: DiscoverOptions
-): Promise<string[] | DiscoveredTestFile[]> {
-  const { projectRoot, testPatterns, exclude, extractMetadata = true } = options;
-
-  // Resolve project root to absolute path
-  const rootPath = resolve(projectRoot);
-
-  // Determine patterns to use
-  const patterns = testPatterns ?? DEFAULT_TEST_PATTERNS;
-  const normalizedPatterns = normalizePatterns([...patterns]);
-
-  // Determine exclusion patterns
-  const excludePatterns = [
-    ...DEFAULT_EXCLUDE_PATTERNS,
-    ...(exclude ?? []),
-  ];
-  const normalizedExclude = normalizePatterns(excludePatterns);
-
-  // Use fast-glob to find test files
-  const files = await fg(normalizedPatterns, {
-    cwd: rootPath,
-    absolute: true,
-    ignore: normalizedExclude,
-    onlyFiles: true,
-    caseSensitiveMatch: false,
-    // Follow symlinks (common in monorepos)
-    followSymbolicLinks: true,
-  });
-
-  // Normalize paths to POSIX style and deduplicate
-  const normalizedFiles = files
-    .map((file) => {
-      // fast-glob already returns absolute paths when absolute: true
-      // Just normalize to POSIX style
-      return toPosixPath(file);
-    })
-    .filter((file, index, array) => {
-      // Deduplicate: keep first occurrence
-      return array.indexOf(file) === index;
-    })
-    .sort(); // Sort for consistent output
-
-  // If metadata extraction is disabled, return simple string array
-  if (!extractMetadata) {
-    return normalizedFiles;
+  const discovered: DiscoveredTestFile[] = [];
+  // Bound open files on large suites; a missing/unreadable spec is an error.
+  for (let offset = 0; offset < files.length; offset += 32) {
+    const batch = await Promise.all(files.slice(offset, offset + 32).map(async (file) => {
+      const resolved = toPosix(relative(realRoot, await realpath(file)));
+      if (resolved === ".." || resolved.startsWith("../")) throw new Error("Spec points outside projectRoot: " + file);
+      const metadata = extractMetadata ? await extractTestMetadata(file) : { tags: [], titles: [], tokens: [] };
+      return { file, ...metadata };
+    }));
+    discovered.push(...batch);
   }
-
-  // Extract metadata for each test file
-  const filesWithMetadata: DiscoveredTestFile[] = await Promise.all(
-    normalizedFiles.map(async (file) => {
-      const metadata = await extractTestMetadata(file);
-      return {
-        file,
-        ...metadata,
-      };
-    })
-  );
-
-  return filesWithMetadata;
+  return extractMetadata ? discovered : files;
 }
-

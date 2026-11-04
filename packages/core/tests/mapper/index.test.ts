@@ -24,7 +24,7 @@ describe("mapDiffToTests", () => {
       resolve(FIXTURES_ROOT, "test-files/cypress/e2e/unrelated.spec.ts"),
     ];
 
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { mode: "heuristic",
       safetyLevel: "high",
     });
 
@@ -47,13 +47,13 @@ describe("mapDiffToTests", () => {
       resolve(FIXTURES_ROOT, "test-files/cypress/e2e/components/input.cy.ts"),
     ];
 
-    const highResult = await mapDiffToTests(diff, tests, {
+    const highResult = await mapDiffToTests(diff, tests, { mode: "heuristic",
       safetyLevel: "high",
     });
-    const mediumResult = await mapDiffToTests(diff, tests, {
+    const mediumResult = await mapDiffToTests(diff, tests, { mode: "heuristic",
       safetyLevel: "medium",
     });
-    const lowResult = await mapDiffToTests(diff, tests, {
+    const lowResult = await mapDiffToTests(diff, tests, { mode: "heuristic",
       safetyLevel: "low",
     });
 
@@ -78,7 +78,7 @@ describe("mapDiffToTests", () => {
       resolve(FIXTURES_ROOT, "test-files/cypress/e2e/components/button.spec.ts"),
     ];
 
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { mode: "heuristic",
       safetyLevel: "high",
       threshold: 0.8,
     });
@@ -206,7 +206,7 @@ describe("mapDiffToTests", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project",
       safetyLevel: "high",
       config: {
         mappings: [
@@ -250,7 +250,7 @@ describe("mapDiffToTests", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project",
       safetyLevel: "low", // Even with low safety, smoke tests should be included
       config: {
         smoke: {
@@ -288,7 +288,7 @@ describe("mapDiffToTests", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, {
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project",
       safetyLevel: "medium",
       config: {
         smoke: {

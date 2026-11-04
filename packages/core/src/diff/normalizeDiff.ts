@@ -68,9 +68,7 @@ export function normalizeDiff(entries: RawDiffEntry[]): ChangedFile[] {
 
     // Create a unique key for deduplication
     // For renamed files, use both paths; for others, use newPath
-    const key = changedFile.oldPath
-      ? `${changedFile.oldPath} -> ${changedFile.newPath}`
-      : changedFile.newPath;
+    const key = JSON.stringify([changedFile.oldPath ?? null, changedFile.newPath]);
 
     // Skip duplicates
     if (seen.has(key)) {

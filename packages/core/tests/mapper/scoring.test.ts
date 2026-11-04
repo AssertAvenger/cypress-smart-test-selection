@@ -59,6 +59,12 @@ describe("scoring", () => {
     });
   });
 
+  it("honours zero weights and rejects non-finite inputs", () => {
+    expect(combineScores([1, 0.5], [0, 1])).toBe(0.5);
+    expect(() => combineScores([NaN])).toThrow();
+    expect(() => combineScores([1], [-1])).toThrow();
+  });
+
   describe("normalizeScore", () => {
     it("should return score as-is if in [0, 1] range", () => {
       expect(normalizeScore(0.5)).toBe(0.5);

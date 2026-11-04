@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    include: ["tests/{diff,discovery,mapper}/**/*.test.ts"],
     globals: true,
     environment: "node",
     coverage: {

@@ -1,287 +1,111 @@
-# cypress-smart-test-selection
+# Cypress Smart Test Selection
 
-Intelligent Cypress test selection based on git diffs. Mimics enterprise-grade Test Impact Analysis for Cypress frameworks.
+Select Cypress specs from Git changes using explicit source-to-spec mappings, with a full-suite fallback when a change cannot be mapped.
 
-## 🚀 Quick Start
+**This branch contains an unreleased redesign. The npm releases 2.0.0/2.0.1 do not contain these changes.**
 
-### Install
-```bash
-npm install cypress-smart-test-selection
-```
+## Why this exists
 
-Or with other package managers:
-```bash
-yarn add cypress-smart-test-selection
-pnpm add cypress-smart-test-selection
-```
+Running the complete browser suite for every change is expensive. Skipping specs based only on similar filenames is risky. This tool makes the selection policy explicit: maintain mappings for known areas, include smoke checks, and run the complete discovered suite for changes outside those mappings.
 
-## Running the Command
+It produces a selection plan; it does not execute Cypress or infer complete dependency coverage.
 
-The `cy-select` command can be run using any package manager. Once installed, the binary is available directly:
+## Selection policy
 
-### Using npx (Recommended)
-```bash
-# See which tests are selected based on your changes
-npx cy-select diff
+The default mode is **conservative**:
 
-# Compare against a specific branch
-npx cy-select diff --base origin/main
+1. Include directly changed specs and specs covered by explicit mappings.
+2. Include configured smoke specs whenever there are relevant changes.
+3. Consider both paths of a rename and the original path of a deletion.
+4. Select the full discovered suite if **any** relevant path is unmapped, a matching mapping has no discovered targets, or shared configuration/dependencies changed.
+5. Return an explicit no-changes result when there are no relevant changes.
 
-# Get JSON output for CI/CD
-npx cy-select diff --json
-```
+Package manifests, common lockfiles, Cypress support/fixtures/plugins, Cypress and selector configuration, TypeScript/build configuration, and GitHub Actions/CircleCI configuration trigger a full suite. Add project-specific shared modules through **fullSuiteOnChange**.
 
-### Using yarn
-```bash
-yarn cy-select diff
-yarn cy-select diff --base origin/main
-yarn cy-select diff --json
-```
+**Mappings are maintained coverage assumptions, not proof of coverage.** Keep scheduled/full main-branch runs and compare selections with full runs before relying on this in CI. Shared dependencies, backend changes and dynamically loaded code can affect specs outside a mapping.
 
-### Using pnpm
-```bash
-pnpm cy-select diff
-pnpm cy-select diff --base origin/main
-pnpm cy-select diff --json
-```
+Opt-in **heuristic** mode adds filename-token and tag signals. It can miss affected specs even when it selects some tests. Scores are not coverage probabilities.
 
-### Using npm scripts (Optional)
-Add to your `package.json` scripts section:
-```json
-{
-  "scripts": {
-    "cy-select": "cy-select"
-  }
-}
-```
+## Local development
 
-Then run:
-```bash
-npm run cy-select diff
-```
+Use Node 22.12+ and pnpm 11.25.0 for this repository.
 
-**That's it!** One command. No complex setup needed.
+~~~sh
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm build
+pnpm typecheck
+pnpm test
+~~~
 
-See [QUICK_START.md](./QUICK_START.md) for detailed usage examples.
+The test command builds both packages, runs the existing tests and exercises the built CLI against temporary Git repositories. It does not start a browser. See [QUICK_START.md](QUICK_START.md) for integration details.
 
-## ✨ Features
+Run the local CLI against a project:
 
-- **Intelligent Test Selection** - Uses 3 heuristics (directory mapping, filename similarity, tags)
-- **Explicit Directory Mappings** - Configure source-to-test path mappings
-- **Smoke Test Guarantee** - Always include critical tests regardless of diff
-- **Git Diff Analysis** - Automatically detects changed files
-- **Configurable Safety Levels** - `high`, `moderate`, `medium`, `low` thresholds
-- **Zero Configuration** - Works out of the box with sensible defaults
-- **CI/CD Ready** - JSON output for automation
-- **TypeScript** - Fully typed, strict mode
+~~~sh
+node /absolute/path/to/this/repo/packages/cli/dist/bin/cy-select.js diff \
+  --root /absolute/path/to/your/project --base origin/main --json
+~~~
 
-## 📦 Project Structure
+## Configuration
 
-This is a monorepo containing:
+Use one **cypress-test-selector.config.mjs**:
 
-- **packages/core** - Core diff parsing and intelligent mapping logic
-- **packages/cli** - Command-line interface for the tool
-- **examples/demo-app** - Simple demo React + Cypress setup
-
-## ⚙️ Configuration
-
-Create a `cypress-test-selector.config.js` file in your project root:
-
-```javascript
-module.exports = {
-  // Explicit directory mappings (required for directory-based matching)
+~~~js
+export default {
+  defaultBase: "origin/main",
   mappings: [
-    { src: 'src/components', test: 'cypress/e2e/components' },
-    { src: 'src/features/auth', test: 'cypress/e2e/auth' },
-    { src: ['src/utils', 'lib/utils'], test: 'cypress/e2e/utils' },
+    { src: "src/features/auth", test: "cypress/e2e/auth" },
+    { src: ["src/cart/**", "src/pricing/**"], test: "cypress/e2e/checkout/**/*.cy.ts" },
   ],
-
-  // Smoke tests - always included regardless of diff
-  smoke: {
-    tags: ['smoke', 'critical'],
-    patterns: ['cypress/smoke/**'],
-  },
-
-  // Safety level: 'high' | 'moderate' | 'medium' | 'low'
-  safetyLevel: 'medium',
-
-  // Test file patterns (optional, uses Cypress defaults)
-  testPatterns: ['cypress/e2e/**/*.spec.ts'],
-
-  // Exclusion patterns (optional)
-  exclude: ['**/node_modules/**'],
+  smoke: { patterns: ["cypress/e2e/smoke/**/*.cy.{js,ts}"], tags: ["smoke"] },
+  fullSuiteOnChange: ["src/shared/**", "src/bootstrap.ts"],
+  ignoreChanges: ["docs/**"],
 };
-```
+~~~
 
-### Configuration Options
+Patterns are case-sensitive, use forward slashes and are anchored to **projectRoot**. Mapping/smoke/shared-change patterns accept literal files, directory prefixes or globs. They do not match arbitrary substrings. Negative patterns and paths outside the project are rejected; use **exclude** for discovery exclusions.
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `mappings` | `DirectoryMapping[]` | `[]` | Explicit source-to-test path mappings |
-| `smoke` | `SmokeConfig` | `undefined` | Smoke test configuration |
-| `safetyLevel` | `string` | `'medium'` | Safety level for test selection |
-| `threshold` | `number` | `undefined` | Custom threshold (overrides safetyLevel) |
-| `testPatterns` | `string[]` | `[]` | Test file glob patterns |
-| `exclude` | `string[]` | `[]` | Exclusion patterns |
-| `defaultBase` | `string` | `'origin/main'` | Default git base branch |
+Supported config formats: .mjs, .cjs, .js (following Node module rules), and .json. TypeScript configuration is unsupported. Configuration modules execute as code; only load them from repositories you trust.
 
-### Directory Mappings
+Precedence: CLI arguments > config file > package.json "cypress-test-selector" > defaults. Arrays replace lower-priority arrays. Invalid, unknown or ambiguous configuration is an error.
 
-Directory mappings link source paths to test paths. When a changed file matches a mapped source path and a test file matches the mapped test path, it's a high-confidence match.
+| Option | Default / purpose |
+| --- | --- |
+| projectRoot | Config directory; relative values resolve against it |
+| testPatterns | cypress/e2e/**/*.{cy,spec,test}.{ts,tsx,js,jsx} |
+| exclude | Extra discovery exclusions; dependencies/build output excluded by default |
+| mappings | Source-to-spec coverage rules |
+| smoke | Extra specs included for relevant changes |
+| fullSuiteOnChange | Additional shared files/directories/globs |
+| ignoreChanges | Explicit non-runtime changes to ignore; none by default |
+| defaultBase | Auto-detect default branch if omitted; set explicitly in CI |
+| mode | conservative or opt-in heuristic |
+| safetyLevel / threshold | Heuristic threshold only; see [mapper API](packages/core/src/mapper/README.md) |
 
-```javascript
-mappings: [
-  // Single path mapping
-  { src: 'src/components', test: 'cypress/e2e/components' },
-  
-  // Multiple source paths to one test path
-  { src: ['src/utils', 'lib/utils'], test: 'cypress/e2e/utils' },
-  
-  // One source path to multiple test paths
-  { src: 'src/api', test: ['cypress/e2e/api', 'cypress/integration/api'] },
-]
-```
+The CLI does not load Cypress configuration automatically. Match discovery to the suite your CI actually runs. “Full suite” means the entire **discovered** inventory, not every possible Cypress project.
 
-**Note**: Without explicit mappings, directory-based matching returns a score of 0. The tool does not use filesystem proximity heuristics.
+## CLI contract
 
-### Smoke Tests
+- Changes are compared from the selected ref's merge-base to the working tree, including committed, staged, unstaged and untracked changes.
+- Pass **--base** explicitly in CI and fetch the target ref plus enough history to find the merge-base.
+- **--root** identifies the config directory. No implicit search through parent directories.
+- **--json** emits one JSON object on stdout. Diagnostics use stderr, including in debug mode.
+- JSON spec paths are project-relative. The returned **projectRoot** identifies where to run Cypress.
+- No remote data is fetched automatically, and no specs are executed by this tool.
 
-Smoke tests are **always included** regardless of:
-- Git diff content
-- Directory mappings
-- Tag matches
-- Similarity scores
+| Status | Meaning | Exit code |
+| --- | --- | --- |
+| selected | A valid selection plan | 0 |
+| full-suite | Every discovered spec selected; inspect fallbackReasons | 0 |
+| no-changes | No relevant changes after configured ignores | 0 |
+| no-tests | Relevant changes, but discovery found no specs | 2 |
+| Error | Invalid config/ref, insufficient history, conflicts, unreadable files, etc. | 1 |
 
-```javascript
-smoke: {
-  // Tests with these tags are always included
-  tags: ['smoke', 'critical'],
-  
-  // Tests matching these patterns are always included
-  patterns: ['cypress/smoke/**', 'cypress/e2e/critical/**'],
-}
-```
+Errors do not produce a successful selection object. Do not turn a non-zero exit into an empty selection or skip the job.
 
-## 📖 Documentation
+## Packages and design
 
-- [Quick Start Guide](./QUICK_START.md) - Get started in 2 minutes
-- [CLI Documentation](./packages/cli/README.md) - Complete CLI reference
-- [Architecture](./ARCHITECTURE.md) - Technical design details
+- **packages/core**: diff parsing, spec discovery and selection policy. Exports: /diff, /discovery and /mapper.
+- **packages/cli**: configuration, Git access and machine/human output.
 
-## 🎯 Real-World Usage
-
-### Local Development
-```bash
-npx cy-select diff  # See which tests would run
-```
-
-### CI/CD Pipeline
-```bash
-npx cy-select diff --base origin/main --json > selected-tests.json
-```
-
-### Debugging
-```bash
-npx cy-select diff --verbose  # See detailed scoring
-```
-
-## Running Selected Tests (Dev and CI)
-
-Once you've identified which tests to run, here's how to execute them in different environments:
-
-### Local Development (Cypress Open Mode)
-
-1. **Generate selected tests config:**
-```bash
-npx cy-select diff --json > selected-tests.json
-```
-
-2. **Create a Cypress config file** (`cypress.selected.config.ts`) that reads from the generated file:
-```typescript
-import { defineConfig } from 'cypress';
-import selectedTests from './selected-tests.json';
-
-export default defineConfig({
-  e2e: {
-    specPattern: selectedTests.selected,
-    // ... your other Cypress config
-  },
-});
-```
-
-3. **Run Cypress in open mode:**
-```bash
-npx cypress open --config-file cypress.selected.config.ts
-```
-
-This opens the Cypress Test Runner with only the selected tests visible.
-
-### Local Development (Headless)
-
-Run selected tests headlessly using the generated config:
-
-```bash
-# Generate selected tests
-npx cy-select diff --json > selected-tests.json
-
-# Run Cypress headless with selected tests
-npx cypress run --config-file cypress.selected.config.ts
-```
-
-Or directly using the JSON output:
-```bash
-npx cy-select diff --json > selected-tests.json
-npx cypress run --spec "$(cat selected-tests.json | jq -r '.selected[]' | tr '\n' ',')"
-```
-
-### CI/CD Pipeline
-
-For CI environments, use `cy-select` to get selected tests, then run Cypress:
-
-```bash
-# Step 1: Get selected tests
-npx cy-select diff --base origin/main --json > selected-tests.json
-
-# Step 2: Run Cypress with selected tests
-npx cypress run --config-file cypress.selected.config.ts
-```
-
-**Example CI script** (GitHub Actions, GitLab CI, etc.):
-```yaml
-# .github/workflows/test.yml
-- name: Get selected tests
-  run: npx cy-select diff --base origin/main --json > selected-tests.json
-
-- name: Run selected Cypress tests
-  run: |
-    if [ -s selected-tests.json ] && [ "$(jq -r '.selected | length' selected-tests.json)" -gt 0 ]; then
-      npx cypress run --config-file cypress.selected.config.ts
-    else
-      echo "No tests selected, skipping Cypress run"
-    fi
-```
-
-**Note:** The `selected-tests.json` file (generated by `cy-select diff --json`) contains a JSON object with a `selected` array of test file paths. The `cypress.selected.config.ts` file references this to configure Cypress to run only the selected tests.
-
-## Heuristics
-
-The tool uses 3 heuristics to match changed files to tests:
-
-### 1. Directory Mapping (Explicit Config)
-- Uses explicit `mappings` configuration
-- Score: 1.0 for match, 0.0 otherwise
-- No filesystem proximity fallback
-
-### 2. Filename Similarity
-- Token-based matching (Dice coefficient + LCS)
-- Handles camelCase, hyphens, underscores
-- Score: 0.0 to 1.0 based on similarity
-
-### 3. Tag Matching
-- Matches test tags against changed file tokens
-- Supports comment tags, inline tags, Cypress metadata
-- Score: 0.0 to 1.0 based on match quality
-
-## License
-
-MIT
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the engineering review, design decisions, compatibility changes and remaining limitations.

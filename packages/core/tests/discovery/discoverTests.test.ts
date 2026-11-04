@@ -263,17 +263,10 @@ describe("discoverTests", () => {
       expect(files.length).toBeGreaterThan(0);
     });
 
-    it("should handle patterns with leading slashes", async () => {
-      const projectRoot = resolve(FIXTURES_ROOT, "simple");
-      const files = await discoverTests({
-        projectRoot,
-        testPatterns: ["/cypress/e2e/**/*.spec.ts"], // Leading slash
-        extractMetadata: false,
-      });
-
-      // Should still work (pattern gets normalized)
-      expect(files.length).toBeGreaterThan(0);
+    it("should reject absolute discovery patterns", async () => {
+      await expect(discoverTests({
+        projectRoot: resolve(FIXTURES_ROOT, "simple"), testPatterns: ["/cypress/**/*.ts"],
+      })).rejects.toThrow("Invalid project-relative pattern");
     });
   });
 });
-

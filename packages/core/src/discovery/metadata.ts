@@ -63,7 +63,7 @@ function extractTags(content: string): string[] {
   }
 
   // Inline tags in describe/it: describe("[auth] login flow")
-  const inlineTagRegex = /(?:describe|it|context|specify)\s*\(\s*["'`]\[([^\]]+)\][^"'`]*["'`]/gi;
+  const inlineTagRegex = /(?:describe|it|context|specify)(?:\.(?:only|skip))?\s*\(\s*["'`]\[([^\]]+)\][^"'`]*["'`]/gi;
   while ((match = inlineTagRegex.exec(content)) !== null) {
     const tagString = match[1].trim();
     tagString
@@ -74,7 +74,7 @@ function extractTags(content: string): string[] {
   }
 
   // Cypress metadata tags: it("test", { tags: ["login", "auth"] }, () => {})
-  const metadataTagRegex = /(?:describe|it|context|specify)\s*\([^,]+,\s*\{[^}]*tags:\s*\[([^\]]+)\]/gi;
+  const metadataTagRegex = /(?:describe|it|context|specify)(?:\.(?:only|skip))?\s*\([^,]+,\s*\{[^}]*tags:\s*\[([^\]]+)\]/gi;
   while ((match = metadataTagRegex.exec(content)) !== null) {
     const tagString = match[1].trim();
     tagString
@@ -97,7 +97,7 @@ function extractTitles(content: string): string[] {
 
   // Match describe/it/context/specify blocks
   // Handles: describe("title", ...), describe('title', ...), describe(`title`, ...)
-  const titleRegex = /(?:describe|it|context|specify)\s*\(\s*["'`]([^"'`]+)["'`]/gi;
+  const titleRegex = /(?:describe|it|context|specify)(?:\.(?:only|skip))?\s*\(\s*["'`]([^"'`]+)["'`]/gi;
   let match;
   while ((match = titleRegex.exec(content)) !== null) {
     const title = match[1].trim();
@@ -133,13 +133,7 @@ export async function extractTestMetadata(
       titles: Array.from(new Set(titles)), // Deduplicate
       tokens: Array.from(new Set(tokens)), // Deduplicate
     };
-  } catch {
-    // If file cannot be read, return empty metadata
-    return {
-      tags: [],
-      titles: [],
-      tokens: [],
-    };
+  } catch (error) {
+    throw new Error("Cannot read spec metadata: " + filePath, { cause: error });
   }
 }
-

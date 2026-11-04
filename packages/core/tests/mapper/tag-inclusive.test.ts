@@ -4,7 +4,7 @@ import { mapDiffToTests } from "../../src/mapper/index.js";
 import type { ChangedFile } from "../../src/diff/types.js";
 import type { DiscoveredTestFile } from "../../src/discovery/types.js";
 
-describe("Tag-based 100% inclusive selection", () => {
+describe("Tag signals in heuristic mode", () => {
   it("should include ALL tests with @cart tag when cart module is changed", async () => {
     const diff: ChangedFile[] = [
       {
@@ -40,7 +40,7 @@ describe("Tag-based 100% inclusive selection", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "high" });
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic", safetyLevel: "high" });
 
     // All cart-tagged tests should be included (3 tests) - 100% inclusive
     const cartTests = result.selected.filter((path) =>
@@ -89,7 +89,7 @@ describe("Tag-based 100% inclusive selection", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "high" });
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic", safetyLevel: "high" });
 
     // All checkout-tagged tests should be included (2 tests) - 100% inclusive
     const checkoutTests = result.selected.filter((path) =>
@@ -157,7 +157,7 @@ describe("Tag-based 100% inclusive selection", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "high" });
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic", safetyLevel: "high" });
 
     // Should include all cart-tagged tests (3 tests) - 100% inclusive
     const cartTests = result.selected.filter((path) =>
@@ -196,7 +196,7 @@ describe("Tag-based 100% inclusive selection", () => {
     expect(result.selected.length).toBeGreaterThanOrEqual(5);
   });
 
-  it("should bypass threshold for tag-matched tests", async () => {
+  it("should respect tag weights", async () => {
     const diff: ChangedFile[] = [
       {
         newPath: "src/components/CartButton.tsx",
@@ -220,19 +220,19 @@ describe("Tag-based 100% inclusive selection", () => {
     ];
 
     // Use high safety level (threshold = 0.0, but tag-matched should still be included)
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "high" });
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic", safetyLevel: "high" });
 
     // Cart test should be included regardless of threshold
     expect(result.selected).toContain(
       resolve("/project", "cypress/e2e/cart/add-item.spec.ts")
     );
     
-    // Check that tag-matched test has score = 1.0
+    // Check that tag-matched test has weighted score = 0.5
     const cartMapping = result.mappings.find(
       (m) => m.testPath === resolve("/project", "cypress/e2e/cart/add-item.spec.ts")
     );
-    expect(cartMapping?.score).toBe(1.0);
-    expect(cartMapping?.reason).toContain("tag match");
+    expect(cartMapping?.score).toBe(0.5);
+    expect(cartMapping?.reason).toContain("heuristic match");
   });
 
   it("should handle hyphenated tags correctly", async () => {
@@ -258,7 +258,7 @@ describe("Tag-based 100% inclusive selection", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "high" });
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic", safetyLevel: "high" });
 
     // user-profile tag should match "user" and "profile" tokens
     expect(result.selected).toContain(
@@ -289,7 +289,7 @@ describe("Tag-based 100% inclusive selection", () => {
       },
     ];
 
-    const result = await mapDiffToTests(diff, tests, { safetyLevel: "medium" });
+    const result = await mapDiffToTests(diff, tests, { projectRoot: "/project", mode: "heuristic", safetyLevel: "medium" });
 
     // Button test should still be selected via directory/filename matching
     expect(result.selected).toContain(
